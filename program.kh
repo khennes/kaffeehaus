@@ -1,8 +1,16 @@
+/* Testing 
+ * multi-line
+ * comments */
+
+$mango
+
 def add(argc int, argv) {  # Keep Go parameter syntax?
 	x int = 5
 	if x == 5 {
+		mango = true
 		return x + x
 	} else {
+		mango = false
 		return x
 	}
 }
