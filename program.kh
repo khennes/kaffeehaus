@@ -1,4 +1,4 @@
-def add(argc int, argv) {
+def add(argc int, argv) {  # Keep Go parameter syntax?
 	x int = 5
 	if x == 5 {
 		return x + x
