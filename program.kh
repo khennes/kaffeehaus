@@ -1,0 +1,9 @@
+def add(argc int, argv) {
+	x int = 5
+	if x == 5 {
+		return x + x
+	} else {
+		return x
+	}
+}
+
