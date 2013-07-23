@@ -5,13 +5,10 @@ import ply.lex as lex
 tokens = (
     'NUMBER',
     'GLOBAL',
-    'DEFCONST',
+#    'DEFCONST',
     'INCLUDE',
     'COMMENT',
     'ID',
-    'HASH',
-    'STCOMM',
-    'ENDCOMM',
 
     # Operators
     'PLUS',
@@ -40,6 +37,9 @@ tokens = (
     'RBRACE',
     'LPAREN',
     'RPAREN'
+    'HASH',
+    'STCOMM',
+    'ENDCOMM',
 )
 
 # Store reserved keywords in Python dictionary
@@ -57,6 +57,7 @@ reserved = { 'if' : 'IF',
     'float' : 'FLOAT',
     'struct' : 'STRUCT',
     'char' : 'CHAR', 
+    'string' : 'STRING',  # Undecided how to implement (most likely as struct)
     'array' : 'ARRAY',
     'break' : 'BREAK',
     'continue' : 'CONTINUE',
@@ -85,7 +86,7 @@ t_MODULO    = r'%'
 t_INCREMENT = r'\+\+'
 t_DECREMENT = r'--'
 t_EQUALS    = r'='
-t_ISEQ	    = r'\=\='
+t_ISEQ	    = r'=='
 t_ISNOTEQ   = r'!='
 t_GREATER   = r'>'
 t_LESS	    = r'<'
@@ -134,10 +135,10 @@ def t_COMMENT(t):
     r'\#.*|/\*(.|\n)*?\*/'  # Test for inline AND multiline comments
     pass
 
-# Check identifiers/names for reserved words
+# Check identifiers/names against reserved keywords
 def t_ID(t):
     r'[a-zA-Z_][a-zA-Z_0-9]*'
-    t.type = reserved.get(t.value, 'ID')  # Check for reserved words
+    t.type = reserved.get(t.value, 'ID')  
     return t
 
 # Error handling rule
@@ -160,4 +161,6 @@ while True:
     if not tokens: 
 	break  # No more input
     print tokens
+
+# return tokens
 
