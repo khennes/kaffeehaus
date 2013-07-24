@@ -78,10 +78,12 @@ symbol("(name)").nud = lambda self: self
 symbol("(end)")
 symbol("lambda", 20)
 symbol("if", 20)  # ternary form (if, elsif, else?)
-symbol(".", 150); symbol("[", 150); symbol("(", 150)  # What about ] and )?
+symbol(".", 150); symbol("[", 150); symbol("(", 150)  
 symbol("]")
-symbol(")")
+symbol("}")
+symbol(")"); symbol(",")
 symbol("else")
+symbol(":")
 
 # Helper function for led method: THERE IS A LEFT
 def infix(id, bp):
@@ -129,6 +131,7 @@ def infix_r(id, bp):
 infix_r("or", 30); infix_r("and", 40); prefix("not", 50)  # ||, &&, !=
 infix_r("**", 140)
 
+
 # Parenthesized expressions
 def nud(self):
     expr = parse_expression()
@@ -136,28 +139,33 @@ def nud(self):
     return expr
 symbol("(").nud = nud
 
+
 def advance(id=None):
     global token
     if id and token.id != id:
         raise SyntaxError("Expected %r" % id)
     token = next()
 
-def method(s):  # FIGURE OUT WHAT TO DO WITH THIS, BELOW
+
+def method(s): 
     assert issubclass(s, symbol_base)
     def bind(fn):
         setattr(s, fn.__name__, fn)
     return bind
 
 # Ternary operators
+@method(symbol("if"))  # Wouldn't this be a nud method?
 def led(self, left):
     self.first = left
     self.second = parse_expression()
     advance("else")
     self.third = parse_expression()
     return self
-symbol("if").led = led
+# symbol("if").led = led  # Decorator replaces this line
+
 
 # Attribute lookup
+@method(symbol("."))
 def led(self, left):
     if token.id != "(name)":
         SyntaxError("Expected an attribute name.")
@@ -165,15 +173,150 @@ def led(self, left):
     self.second = token
     advance()
     return self
-symbol(".").led = led
+# symbol(".").led = led  # Decorator replaces this line
+
 
 # Item lookup
+@method(symbol("["))
 def led(self, left):
     self.first = left
     self.second = parse_expression()
     advance("]")
     return self
-symbol("[").led = led
+# symbol("[").led = led  # Decorator replaces this line
+
+
+# Function calls: treat LPAREN as binary operator
+@method(symbol("("))
+def led(self, left):
+    self.first = left
+    self.second = []
+    if token.id != ")":
+        while 1:
+            self.second.append(parse_expression())
+            if token.id != ",":
+                break
+            advance(",")  # Checks for given value in current token, advances
+    advance(")")
+    return self
+# COMMENT FROM AUTHOR:
+# Does not support keyword arguments, *, or **: To handle keyword arguments,
+# check for "=" after first expr; if found, check that subtree is a plain name,
+# then call expr again to get the default val. * & ** could be handled by "nud"
+# methods on corresponding operators, but easier to also handle in this method.
+# Keyword arguments meaning "object", etc.?
+
+# Lambda keyword (a prefix operator)
+@method(symbol("lambda"))  # Really need to learn about lambda.
+def nud(self):
+    self.first = []
+    if token.id != ":":
+        argument_list(self.first)
+    advance(":")
+    self.second = parse_expression()
+    return self
+
+def argument_list(list):
+    while 1:
+        if token.id != "(name)":
+            SyntaxError("Expected an argument name.")
+        list.append(token)
+        advance()
+        if token.id != ",":
+            break
+        advance(",")
+# AUTHOR'S COMMENT:
+# Doesn't handle default vals, *, or **. Also, no scope handling at parser
+# level; see Crockford for more info on that.
+
+
+# Constants: handled as literals
+def constant(id):
+    @method(symbol(id))
+    def nud(self):
+        self.id = "(literal)"  # Change token instance to literal node, then \
+                               # insert token itself as literal value
+        self.value = id
+        return self
+
+constant("None")
+constant("True")
+constant("False")
+
+
+# Multi-token operators
+# Fixing these in parsing rather than lexing - to consider
+@method(symbol("not"))  # Will I have any of these? Don't think so
+def led(self, left):
+    if token.id != "in":
+        raise SyntaxError("Invalid syntax")
+    advance()
+    self.id = "not in"
+    self.first = left
+    self.second = parse_expression(60)
+    return self
+
+@method(symbol("is"))
+def led(self, left):
+    if token.id == "not":
+        advance()
+        self.id = "is not"
+    self.first = left
+    self.second = parse_expression(60)
+    return self
+
+
+# Tuples, lists, dictionaries
+# Add extra if to beg of collection loop to allow optional trailing commas
+@method(symbol("("))
+def nud(self):
+    self.first = []
+    comma = False
+    if token.id != ")":
+        while 1:
+            if token.id == ")":
+                break
+            self.first.append(parse_expression())
+            if token.id != ",":
+                break
+            comma = True
+            advance(",")
+    advance(")")
+    if not self.first or comma:
+        return self  # tuple
+    else:
+        return self.first[0]
+
+@method(symbol("["))
+def nud(self):
+    self.first = []
+    if token.id != "]":
+        while 1:
+            if token.id == "]":
+                break
+            self.first.append(parse_expression())
+            if token.id != ",":
+                break
+            advance(",")
+    advance("]")
+    return self
+
+@method(symbol("{"))
+def nud(self):
+    self.first = []
+    if token.id != "}":
+        while 1:
+            if token.id == "}":
+                break
+            self.first.append(parse_expression())
+            advance(":")
+            self.first.append(parse_expression())
+            if token.id != ",":
+                break
+            advance(",")
+    advance("}")
+    return self
+
 
 
 # token_pat = re.compile("\s*(?:(\d+)|(\*\*|.))")  # now using Tokenize mod

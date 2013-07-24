@@ -7,10 +7,10 @@ $mango bool  # Testing global variable
 def add(argc int, argv) {  # Require typed parameters/return values? Not sure yet.
     x int = 5
     if x == 5 {
-        mango = true
+        $mango = true
         return x + x
     } else {
-        mango = false
+        $mango = false
         return x
     }
 }
