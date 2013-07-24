@@ -2,10 +2,9 @@ import sys
 import ply.lex as lex
 
 # List of token names. This is always required.
-tokens = (
+tokens_list = (
     'NUMBER',
     'GLOBAL',
-#    'DEFCONST',
     'INCLUDE',
     'COMMENT',
     'ID',
@@ -39,7 +38,7 @@ tokens = (
     'RPAREN'
     'HASH',
     'STCOMM',
-    'ENDCOMM',
+    'ENDCOMM'
 )
 
 # Store reserved keywords in Python dictionary
