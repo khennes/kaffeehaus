@@ -51,6 +51,7 @@ symbol("(name)");  // prototype for new names, eg variable names
 /**** TOKENS ****/
 
 var token;  // will always contain current token
+var token_nr;  // added this, wasn't defined before reference
 
 // make new token obj from next token in array, assign it to var token
 // new token obj prototype is a (name) token in current scope, or a symbol from
@@ -472,15 +473,125 @@ stmt("return", function() {
 
 /**** FUNCTIONS ****/
 
+prefix("function", function() {
+    var a = [];  // list of parameter names
+    new_scope();  // create new scope instance with parent s
+    if (token.arity === "name") {
+        scope.define(token);  // define (reserve?) function name
+        this.name = token.value;
+        advance();
+    }
+    advance("(");
+    if (token.id !== ")") {  // if function takes arguments
+        while (true) {
+            if (token.arity !== "name") {  // throw error if token type is not "name"
+                token.error("Expected a parameter name.");
+            }
+            scope.define(token);  // reserve? token
+            a.push(token); // add token to list of parameter names
+            advance();
+            if (token.id !== ",") {  // if only one parameter, break
+                break; 
+            }
+            advance(",");  // return to top if >1 parameter
+        }
+    }
+    this.first = a;  // left child: array of parameter names
+    advance(")");  // check for closing RPAREN
+    advance("{");  // check for opening LBRACE
+    this.second = statements();  // right child: parse statements until end of block
+    advance("}");  // check for closing RBRACE
+    this.arity = "function";  // conclude that token type is function
+    scope.pop();  // end scope
+    return this;
+});
+
+infix("(", 80, function(left) {
+    var a = [];
+    if (left.id === "." || left.id === "[") {
+        this.arity = "ternary";
+        this.first = left.first;
+        this.second = left.second;
+        this.third = a;
+    } else {
+        this.arity = "binary";
+        this.first = left;
+        this.second = a;
+        if ((left.arity !== "unary" || left.id !== "function") &&
+                left.arity !== "name" && left.id !== "(" &&
+                left.id !== "&&" && left.id !== "||" && left.id !== "?") {
+            left.error("Expected a variable name.");
+        }
+    }
+    if (token.id !== ")" {
+        while (true) {
+            a.push(parse_expression(0));
+            if (token.id !== ",") {
+                break;
+            }
+            advance(",");
+        }
+    }
+    advance(")";
+    return this;
+});
 
 
+symbol("this").nud = function() {
+    scope.reserve(this);
+    this.arity = "this";
+    return this;
+};
 
 
+/**** OBJECT LITERALS ****/
 
+// array literal: zero or more comma-separated expressions
+// each expr is evaluated & results are collected into a new array
 
+prefix("[", function() {
+    var a = [];
+    if (token.id !== "]") {
+        while (true) {
+            a.push(parse_expression(0));
+            if (token.id !== ",") {
+                break;
+            }
+            advance(",");
+        }
+    }
+    advance("]");
+    this.first = a;
+    this.arity = "unary";
+    return this;
+});
 
+// object literal: zero or more comma-separated key/expr pairs (key = literal)
 
-
+prefix("{", function() {
+    var a = [];
+    if (token.id !== "}") {
+        while (true) {
+            var n = token;
+            if (n.arity !== "name" && n.arity !== "literal") {
+                token.error("Bad key.");
+            }
+            advance();
+            advance(":");
+            var v = parse_expression(0);
+            v.key = n.value;
+            a.push(v);
+            if (token.id !== ",") {
+                break;
+            }
+            advance(",");
+        }
+    }
+    advance("}");
+    this.first = a;
+    this.arity = "unary";
+    return this;
+});
 
 
 
