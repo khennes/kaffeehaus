@@ -267,6 +267,210 @@ infix_r("||", 30);
 
 /**** PREFIX OPERATORS ****/
 
+var prefix = function(id, nud) {
+    var s = symbol(id);
+    s.nud = nud || function() {  // no left, use nud
+        scope.reserve(this);
+        this.first = parse_expression(70);
+        this.arity = "unary";
+        return this;
+    };
+    return s;
+}
+
+prefix("-");
+prefix("!");
+prefix("typeof");
+
+prefix("(", function() {
+    var e = parse_expression(0);
+    advance(")";
+    return e;  // ( token does not become part of parse tree; nud returns inner expr
+});
+
+
+/**** ASSIGNMENT OPERATORS ****/
+
+// We could use infix_r, but have added extra capability
+var assignment = function(id) {
+    return infix_r(id, 10, function(left) {
+        if left.id !== "." && left.id !== "[" &&  // throw error if token type 
+                                                  // is not . or [ & is not a name
+                left.arity !== "name") {
+            left.error("Bad lvalue.");
+        }
+        this.first = left;
+        this.second = parse_expression(9);  // why lower bp?
+        this.assignment = true;
+        this.arity = "binary";
+        return this;
+    });
+};
+
+// Inheritance pattern: assignment returns infix_r result, which returns symbol result
+assignment("=");
+assignment("+=");
+assignment("-=");
+
+
+/**** CONSTANTS ****/
+
+var constant = function(s, v) {  // change name token -> literal token
+    var x = symbol(s);
+    x.nud = function() {
+        scope.reserve(this);  // reserved name?
+        this.value = symbol_table[this.id].value;
+        this.arity = "literal";
+        return this;
+    };
+    x.value = v
+    return x;
+};
+
+constant("true", true);
+constant("false", false);
+constant("null", null);
+constant("pi", 3.141592653589793);
+
+symbol("(literal)").nud = itself;  // prototype for str, num literals (see l95)
+
+
+/**** STATEMENTS ****/
+
+// Crockford adds functionality to handle statements as well as expressions
+var parse_statement = function() {
+    var n = token, v;
+    if (n.std) {  // if token has std method, reserve token & invoke method
+        advance();
+        scope.reserve(n);
+        return n.std();
+    }
+    v = parse_expression(0);  // otherwise, parse as expression
+    if (!v.assignment && v.id !== "(" {  // throw error if not an assignment type or ( id
+        v.error("Bad expression statement.");
+    }
+    advance(";");  // check for semicolon
+    return v;
+};
+
+// Parse statements until (end) or } (end of block)
+var statements = function() {
+    var a = [], s;
+    while (true) {
+        if (token.id === "}" || token.id === "(end)" {
+            break;
+        }
+        s = parse_statement();
+        if (s) {
+            a.push(s);
+        }
+    }
+    return a.length === 0 ? null : a.length === 1 ? a[0] : a;
+};
+
+// add statement symbols to symbol_table
+var stmt = function(s, f) {  // pass in statement id, std
+    var x = symbol(s);
+    x.std = f;
+    return x;
+};
+
+// block statements: add block scope (not in actual JS)
+stmt("{", function() {
+    new_scope();
+    var a = statements();
+    advance("}");
+    scope.pop();
+    return a;
+});
+
+// parse block
+var block = function() {
+    var t = token;
+    advance("{");
+    return t.std();
+};
+
+// define variables in current block
+// add 'var' symbol to symbol_table
+stmt("var", function() {
+    var a = [], n, t;
+    while (true) {
+        n = token;
+        if (n.arity !== "name") {
+            n.error("Expected a new variable name.");
+        }
+        scope.define(n);
+        advance();
+        if (token.id === "=") {
+            t = token;
+            advance("=");
+            t.first = n;
+            t.second = parse_expression(0);
+            t.arity = "binary";
+            a.push(t);
+        }
+        if (token.id !== ",") {
+            break;
+        }
+        advance(",");
+    }
+    advance(";");
+    return a.length === 0 ? null : a.length === 1 ? a[0] : a;
+});
+
+// add 'while' symbol to symbol_table
+stmt("while", function() {
+    advance("(");
+    this.first = parse_expression(0);  // left child node = conditional expr
+    advance(")");  // check for end of expr before moving on
+    this.second = block();  // right child node = block
+    this.arity = "statement";  // symbol type
+    return this;
+});
+
+// add 'if' symbol to symbol_table
+stmt("if", function() {
+    advance("(");
+    this.first = parse_expression(0);  // parse conditional expr (left child node)
+    advance(")");  // check for end of expr, next
+    this.second = block();  // right child node is a block
+    if (token.id === "else") {
+        scope.reserve(token);  // what does this line do?
+        advance("else");
+        this.third = token.id === "if" ? statement() : block();  // check for ternary case
+    } else {
+        this.third = null;
+    }
+    this.arity = "statement";
+    return this;
+});
+
+// add 'break' symbol to symbol_table
+stmt("break", function() {
+    advance(";");
+    if (token.id !== "}") {
+        token.error("Unreachable statement.");
+    }
+    this.arity = "statement";
+    return this;
+});
+
+// add 'return' symbol to symbol_table
+stmt("return", function() {
+    if (token.id !== ";") {
+        this.first = parse_expression(0);
+    }
+    advance(";");
+    if (token.id !== "}") {
+        token.error("Unreachable statement.");
+    }
+    this.arity = "statement";
+    return this;
+});
+
+
+/**** FUNCTIONS ****/
 
 
 
