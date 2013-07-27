@@ -2,6 +2,12 @@ import sys
 import ply.lex as lex
 
 # List of token names. This is always required.
+# Also need !, ., 
+
+def main():
+    print "Lexer has run successfully."
+    return token_stream
+
 tokens_list = (
     'NUMBER',
     'GLOBAL',
@@ -16,6 +22,7 @@ tokens_list = (
     'DIVIDE',
     'POWER',
     'MODULO',
+    'DOT',
     'INCREMENT',
     'DECREMENT',
     'EQUALS',
@@ -67,7 +74,7 @@ reserved = { 'if' : 'IF',
 
 # Build list of tokens + reserved keywords
 tokens = [ 'NUMBER', 'PLUS', 'MINUS', 'TIMES', 'DIVIDE', 'POWER', 'MODULO',
-            'INCREMENT', 'DECREMENT', 'EQUALS', 'ISEQ', 'ISNOTEQ', 'GREATER',
+            'DOT', 'INCREMENT', 'DECREMENT', 'EQUALS', 'ISEQ', 'ISNOTEQ', 'GREATER',
             'LESS', 'LESSEQ', 'GREATEQ', 'BOOLAND', 'BOOLOR', 'COMMA', 'LBRACK',
             'RBRACK', 'LBRACE', 'RBRACE', 'LPAREN', 'RPAREN', 'GLOBAL',
             'DEFCONST', 'INCLUDE', 'COMMENT', 'ID', 'HASH', 'STCOMM', 'ENDCOMM'
@@ -82,6 +89,7 @@ t_TIMES	    = r'\*'
 t_DIVIDE    = r'/'
 t_POWER	    = r'\*\*'
 t_MODULO    = r'%'
+t_DOT       = r'.'
 t_INCREMENT = r'\+\+'
 t_DECREMENT = r'--'
 t_EQUALS    = r'='
@@ -145,21 +153,5 @@ def t_error(t):
     print "Invalid character: '%s'" % t.value[0]
     t.lexer.skip(1)
 
-# Build the lexer
-lexer = lex.lex()
-
-# Feed input program to lexer
-args = sys.argv
-script, filename = args
-f = open(filename).read()
-lexer.input(f)
-
-# Tokenize
-while True:
-    tokens = lexer.token()
-    if not tokens: 
-	break  # No more input
-    print tokens
-
-# return tokens
-
+if __name__ == "__main__":
+    main() 
