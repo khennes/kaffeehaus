@@ -6,7 +6,6 @@ import ply.lex as lex
 
 def main():
     print "Lexer has run successfully."
-    return token_stream
 
 tokens_list = (
     'NUMBER',
@@ -153,5 +152,24 @@ def t_error(t):
     print "Invalid character: '%s'" % t.value[0]
     t.lexer.skip(1)
 
+
+# Build the lexer
+lexer = lex.lex()
+
+# Feed input program to lexer
+args = sys.argv
+script, filename = args
+f = open(filename).read()
+lexer.input(f)
+
+# Tokenize
+while True:
+    tokens = lexer.token()
+    if not tokens:
+        break  # no more input
+    print tokens
+
 if __name__ == "__main__":
     main() 
+
+

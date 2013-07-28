@@ -4,11 +4,12 @@ import re
 
 
 """ GLOBALS """
-token = None  # contains current token object
-next = None
-symbol_table = {}  # store symbol classes
-token_stream = None  # returned from tokenize(); does this need to be global?
-# scope  # contains current scope object
+token = None        # contains current token object
+next                # holds next token obj in token_stream?
+symbol_table = {}   # store symbol classes
+symbols_found = {}  # for debugging - which tokens have been parsed
+token_stream = None # does this need to be global?
+# scope             # contains current scope object
 
 
 """ LEXER """
@@ -164,25 +165,53 @@ def t_error(t):
 
 """ CALL LEXING & PARSING FUNCTIONS """
 
-def tokenize(program):
-    lexer = lex.lex()  # build lexer
+def generate_tokens(program):    
+    print program
+    token_stream = []
+    lexer = lex.lex()           # build lexer
     lexer.input(program)
 
     while True:
         tokens = lexer.token()
+        print tokens
         if not tokens:
-            break  # no more input
-        token_stream = list(tokens)
-        print token_stream
-    return token_stream
+            break                   # no more input
+        token_stream.append(tokens)  # creating a list rather than generator
+    return token_stream             
+
+def tokenize(token_stream):
+    global symbol_table
+    print token_stream
+    for token in token_stream:      # token = LexToken object
+        print token
+        if token.type == "NUMBER":  # renamed 'ttype' to 'type' (Ply docs)
+            print "YES A NUMBER"
+            symbol = symbol_table[token.type]  
+            s = symbol(token.type, token.value, token.lineno, token.lexpos)
+            # s.value = value  
+        else:                       # if name or operator
+            print "NO NOT A NUMBER", token.type, token.value
+            symbol = symbol_table.get(token.value)
+            if symbol:
+                s = symbol(token.type, token.value, token.lineno, token.lexpos)
+            elif token.type == "ID":
+                print "SYMBOL IS A NAME/ID", token.type
+                symbol = symbol_table[token.type]
+                s = symbol(token.type, token.value, token.lineno, token.lexpos)
+                # s.value = value
+            else:
+                raise SyntaxError("Unknown operator (%r)" % id)
+        yield s     # yields a generator
+
 
 def parse():
-    global token, next
-    program = raw_input("> ")
-    token_stream = tokenize(program)
-    next = token_stream.next
-    token = next()
-    return parse_expression()
+    global token, next 
+    filename = raw_input("> ")
+    program = open(filename).read()
+    token_stream = generate_tokens(program)
+    next = tokenize(token_stream).next
+    token = next()  # What do these two lines do, exactly?
+    return parse_expression()  
 
 
 """
@@ -205,15 +234,19 @@ In example "1 + 2 * 4", you have +, 2, and *. * has higher bp, so it 'wins' 2.
 """
 
 """ EXPRESSION PARSER """
-def parse_expression(rbp=0):  # default binding power = 0 
-    global token 
-    t = token  # contains copy of current token
-    token = next()  # fetch next token in list, store as token
-    left = t.nulld()  # this will be first token in expr - no left
-    while rbp < token.lbp:  # keep going till rbp > current token's bp?
+def parse_expression(rbp=0):    # default binding power = 0 
+    global token
+    t = token
+    try:
+        token = next()              # to handle StopIteration exception 
+    except StopIteration:           # a more elegant way to do this?
+        pass
+    left = t.nulld()
+    while rbp < token.lbp:          # keep going till rbp > current token's bp
         t = token
         token = next()
         left = t.leftd(left)
+    print "LEFT: ", left
     return left
 
 
@@ -225,7 +258,7 @@ def parse_statement(rbp=0):
 
 """ TOKEN CLASSES """
 
-""" Why is Literal a separate class from Token? """
+""" Why is Literal a separate class from BaseSymbol? """
 # for numbers and constants
 class Literal(object):
     def __init__(self, ttype, value, lineno, lexpos):
@@ -240,7 +273,7 @@ class Literal(object):
         return "(literal %s) % self.value"  # generate parse tree
 
 # base class for operators
-class Symbol(object):
+class BaseSymbol(object):
     def __init__(self, ttype, value, lineno, lexpos):
         self.ttype = ttype  # token type
         self.value = value  # used by literals and names
@@ -253,16 +286,16 @@ class Symbol(object):
     third = None
 
     def nulld(self):
-        raise SyntaxError("Syntax error (%r)." % self.id)
+        raise SyntaxError("Syntax error (%r)." % self.ttype)
 
     def leftd(self, left):
-        raise SyntaxError("Unknown operator (%r)." % self.id)
+        raise SyntaxError("Unknown operator (%r)." % self.ttype)
 
     """ for error-checking: outputs Py string representation of an object """
     def __repr__(self):
-        if self.id == "(name)" or self.id == "(literal)":
-            return "(%s %s)" % (self.id[1:-1], self.value)  # why slice?
-        out = [self.id, self.first, self.second, self.third]
+        if self.ttype == "ID" or self.ttype == "NUMBER":
+            return "(%s %s)" % (self.ttype, self.value)  # why slice?
+        out = [self.ttype, self.first, self.second, self.third]
         out = map(str, filter(None, out))  # what is happeninggg
         return "(" + " ".join(out) + ")"
 
@@ -270,16 +303,16 @@ class Symbol(object):
 Take token id & optional bp, generate new class if needed. If symbol is
 already in symbol_table, update the bp. """
 
-def symbol(id, bp=0):
+def symbol(ttype, bp=0):
     try:
-        symbol = symbol_table[id]
-    except KeyError:  # if key missing, create new key/class
-        class symbol_class(Symbol):
-            pass  # inherit from BaseSymbol class
+        symbol = symbol_table[ttype]
+    except KeyError:            # if key missing, create new key/class
+        class symbol_class(BaseSymbol):
+            pass                # inherit from BaseSymbol class
         symbol_class.__name__ = "symbol-"  # for debugging (?)
-        symbol_class.id = id
+        symbol_class.ttype = ttype
         symbol_class.lbp = bp
-        symbol_table[id] = symbol_class
+        symbol_table[ttype] = symbol_class
     else:
         # if not the above two cases, where is symbol_class defined?
         symbol_class.lbp = max(bp, symbol_class.lbp)  # wtf does this do
@@ -288,7 +321,8 @@ def symbol(id, bp=0):
 # Register simple tokens to symbol_table
 symbol("(literal)").nulld = lambda self: self  # wtf is happening
 symbol("(name)").nulld = lambda self: self  # is this for reserved keywords?
-symbol("(end)")
+symbol("NUMBER").nulld = lambda self: self
+symbol("END")
 """ COME BACK TO THESE
 symbol("(lambda)")  # do I need this?
 symbol("if", 20)
@@ -305,12 +339,12 @@ symbol("else")
 
 """ PREFIX OPERATORS """
 """
-def prefix(id, bp):
+def prefix(ttype, bp):
     def nulld(self):  # attach nodes to nulld method
         self.first = parse_expression(bp)  # bp = rbp
         self.second = None
         return self
-    symbol(id).nulld = nulld  # attach nulld method to symbol, add to symbol_table
+    symbol(ttype).nulld = nulld  # attach nulld method to symbol, add to symbol_table
 
 # Register operator symbols to symbol_table
 prefix("!", 20)
@@ -319,12 +353,12 @@ prefix("-", 20)  # not sure if I'm using this?
 
 """ INFIX OPERATORS """
 
-def infix(id, bp):
+def infix(ttype, bp):
     def leftd(self, left):
         self.first = left
         self.second = parse_expression(bp)  # bp = rbp
         return self
-    symbol(id, bp).leftd = leftd
+    symbol(ttype, bp).leftd = leftd
 
 # Register operator symbols to symbol_table
 """
@@ -344,12 +378,12 @@ infix("/", 120);
 
 """ INFIX_R OPERATORS """
 """
-def infix_r(id, bp):
+def infix_r(ttype, bp):
     def leftd(self, left):
         self.first = left
         self.second = parse_expression(bp-1)  # still not certain why...
         return self
-    symbol(id, bp).leftd = leftd
+    symbol(ttype, bp).leftd = leftd
 
 # Register operator symbols to symbol_table
 infix_r("||", 30)
