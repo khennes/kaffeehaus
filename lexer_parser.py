@@ -210,7 +210,7 @@ def parse():
     program = open(filename).read()
     token_stream = generate_tokens(program)
     next = tokenize(token_stream).next  # what exactly does this do?
-    token = next()
+    token = next()                      # TODO: explore Crockford's advance()
     print "TOKEN: ", token
     return parse_expression()  
 
@@ -298,7 +298,7 @@ class BaseSymbol(object):
         return "(" + " ".join(out) + ")"
 
 
-""" TOKEN FACTORY """
+""" SYMBOL FACTORY """
 
 def symbol(ttype, bp=0):
     try:
@@ -328,13 +328,13 @@ symbol("[", 150)
 symbol("(", 150)
 symbol("]")
 symbol("}")
-symbol(")")
 symbol(",")
 # symbol(":")
 symbol("else")
 """
+symbol(")")
 
-""" PREFIX OPERATORS """
+""" BASIC PREFIX OPERATORS """
 """
 def prefix(ttype, bp):
     def nulld(self):  # attach nodes to nulld method
@@ -350,6 +350,7 @@ prefix("-", 20)  # not sure if I'm using this?
 
 """ INFIX OPERATORS """
 
+# Helper function for led method: THERE IS A LEFT
 def infix(ttype, bp):
     def leftd(self, left):
         self.first = left
@@ -372,6 +373,24 @@ infix("*", 120)
 infix("/", 120)
 # infix("%", 120)
 
+
+# Helper method (check for errors before fetching next expression)
+def advance(value=None):
+    global token
+    if value and token.value != value:
+        raise SyntaxError("Expected %r" % value)
+    try:
+        token = next()
+    except StopIteration:
+        pass
+
+
+# Helper method to handle LPAREN (first token in expression, NO LEFT)
+def nulld(self):
+    expression = parse_expression()
+    advance(")")  # check current token for given value before fetching next
+    return expression
+symbol("(").nulld = nulld
 
 """ INFIX_R OPERATORS """
 """
