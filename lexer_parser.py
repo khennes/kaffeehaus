@@ -22,7 +22,7 @@ token = None        # contains current token object
 next                # holds next token obj in token_stream
 symbol_table = {}   # store symbol classes
 token_stream = None # does this need to be global?
-# scope             # contains current scope object
+scope = None        # contains current scope object
 
 
 ### LEXER ###
@@ -166,7 +166,7 @@ def t_COMMENT(t):
 # Check identifiers/names against reserved keywords
 def t_ID(t):
     r'[a-zA-Z_][a-zA-Z_0-9]*'
-    t.type = reserved.get(t.value, 'ID')  
+    t.type = reserved.get(t.value, 'ID')  # default to 'ID' if not a keyword
     return t
 
 # Error handling rule
@@ -231,6 +231,51 @@ def parse():
     print "TOKEN: ", token
     return parse_expression()  
 
+"""
+### SCOPE ###
+# Default scope is local rather than $global
+
+class Rule(object):
+    def nulld(self, ....):
+        raise NotImplementedError
+
+class Scope(object):
+
+    def __init__(self,token_name):
+        self.token_name = token_name  # new variable
+        self.parent = None
+
+    def define(self, token_name):
+        if 
+        self.reserved = False
+        self.nulld = itself  # what
+        self.leftd = null
+        self.leftbp = 0
+        self.scope = scope
+    
+    def find(self, token_name):
+        while True:
+            
+    
+    t.type = reserved.get(t.value, 'ID')
+    
+    def pop(self):  # close scope, return focus to parent
+        global scope
+        s = scope
+        scope = s.parent
+        # return scope? self?
+
+    # how to handle? what is the difference betw using an already-defined
+    # and a reserved name?
+    def reserve(token_name):
+        pass
+
+def new_scope():
+    # if token.id == "ID" and token is not reserved keyword
+    global scope, token
+    s = scope
+    scope = Scope(token.value) 
+"""
 
 """
 BINDING POWERS (from Crockford)
@@ -264,24 +309,47 @@ def parse_expression(rbp=0):    # default binding power = 0
         t = token
         token = next()
         left = t.leftd(left)
-    print "LEFT: ", left
     return left
 
 
 ### STATEMENT PARSER ###
-# Do I need this?
-def parse_statement(rbp=0):
+
+# Parse a single statement at a time
+def parse_statement():
     global token
     t = token
-    try:
-        token = next()
-    except StopIteration:
-        pass
+    if t.stmtd:         # where to add this method?
+        try:
+            token = next()
+        except StopIteration:
+            pass
+        # scope.reserve(t)
+        return t.stmtd()
+    expression = parse_expression()
+    # TODO: if not an assignment and not "(", throw error
+    advance(";")
+    return expression
 
+
+# Continue parsing all statements in a row, return list
+def parse_stmts():
+    stmtlist = []
+    while True:
+        if token.value == "}" or token.value == "(end)":
+            break
+        s = parse_statement()
+        if s:
+            stmtlist.append(s)
+    if len(stmtlist) == 0:
+        stmtlist = null
+    elif len(stmtlist) == 1:
+        stmtlist = stmtlist[0]
+    return stmtlist
 
 
 ### TOKEN CLASSES ##"
 
+# WHERE DO THESE COME IN? So far, everything passes through BaseSymbol instead?
 # for numbers and constants
 class Literal(object):
     def __init__(self, value):
@@ -298,7 +366,7 @@ class Literal(object):
 class BaseSymbol(object):
     def __init__(self, ttype, value, lineno, lexpos):
         self.ttype = ttype  # token type
-        self.value = value  # used by literals and names
+        self.value = value
         self.lineno = lineno
         self.lexpos = lexpos
 
@@ -307,15 +375,16 @@ class BaseSymbol(object):
     second = None
     third = None
 
+    def stmtd(self):
+        pass            # raise SyntaxError?
+
     def nulld(self):
         raise SyntaxError("Syntax error (%r)." % self.value)
 
     def leftd(self, left):
         raise SyntaxError("Unknown operator (%r)." % self.value)
 
-    # def stmtd(self):
-
-    """ for error-checking: outputs Py string representation of AST """
+    """ outputs Py string representation of parse tree """
     def __repr__(self):
         if self.ttype == "ID" or self.ttype == "NUMBER":
             return "(%s %s)" % (self.ttype, self.value)
@@ -337,25 +406,18 @@ def symbol(ttype, bp=0):
         NewSymbol.leftbp = bp
         symbol_table[ttype] = NewSymbol
     else:
-        # how is NewSymbol defined here?
         NewSymbol.leftbp = max(bp, NewSymbol.leftbp)
     return NewSymbol
 
 # Register simple tokens to symbol_table
 symbol("(literal)").nulld = lambda self: self
-symbol("ID").nulld = lambda self: self
+symbol("ID").nulld = lambda self: self  # variables and function names
 symbol("NUMBER").nulld = lambda self: self
 symbol(")")
 symbol("]")
 """
 symbol("(lambda)")
 symbol("if", 20)
-symbol(".", 150)
-symbol("[", 150)
-symbol("(", 150)
-symbol("}")
-symbol(",")
-symbol(":")
 symbol("else")
 symbol("END")
 """
@@ -377,7 +439,7 @@ prefix("-", 20)  # not sure if I'm using this?
 
 ### INFIX OPERATORS ###
 
-# Helper function for led method: THERE IS A LEFT
+# Helper method for led method: THERE IS A LEFT
 def infix(ttype, bp):
     def leftd(self, left):
         self.first = left
@@ -409,7 +471,7 @@ def infix_r(ttype, bp):
     symbol(ttype, bp).leftd = leftd
 
 # Register symbols to symbol_table
-infix_r("=", 10)
+infix_r("=", 10)        # why is this infix_r? did i put it here?
 infix_r("+=", 10)
 infix_r("-=", 10)
 infix_r("||", 30)
@@ -425,6 +487,27 @@ def nulld(self):
     advance(")")  # check current token for given value before fetching next
     return expression
 symbol("(").nulld = nulld
+
+
+# Helper method to handle reserved keywords & variables?
+def statement(ttype, bp):
+    def stmtd(self):
+        self.first = parse_statement()
+        self.second = None
+        return self
+    symbol(ttype).stmtd = stmtd
+
+statement("def", 20)
+statement("if", 20)
+statement("elsif", 20)
+statement("else", 20)
+statement("break", 20)
+statement("continue", 20)
+statement("return", 20)
+statement("for", 20)
+statement("while", 20)
+statement("print", 20)
+# symbol("ID").nulld = lambda self: self  # variables and function names
 
 
 # Helper method for next (check for errors before fetching next expression)
@@ -493,7 +576,7 @@ def nulld(self):
 # Function calls: treat LPAREN as binary operator
 @method(symbol("("))
 def leftd(self, left):
-    self.first = left
+    self.first = left  # this must be a non-reserved identifier/name
     self.second = []  # Right node will be list of function params
     if token.value != ")":
         while True:
@@ -505,41 +588,10 @@ def leftd(self, left):
     return self
 
 
-"""
-TODO: SCOPE
-# using Crockford's JS implementation
-# global scope variable declared at top
-# in Python, default scope is local rather than $global
+### STATEMENT SYMBOLS ###
 
-class Rule(object):
-    def nulld(self, ....):
-        raise NotImplementedError
-    
-class Scope(Rule):
-    reserved = False
-    nulld    = itself  # what
-    leftd    = null
-    leftbp   = 0
-    scope    = scope
-    def __init__(self, token_name):  # ??
-        #jdunck - assign to self here, not mutating token_name.
-        # Class defaults?
-        return token_name
-    
-    def define(token_name):
-        pass
-    
-    def find(token_name):
-        pass
-    
-    def pop():  # close scope, return focus to parent
-        # scope = s.parent
-        pass
 
-    def reserve(token_name):
-        pass
 
-def new_scope():
-    s = scope
-    scope = 
-"""
+
+# STATEMENTS
+# def, if, then?, elsif, else, while, for, break, continue, return, get  
