@@ -10,13 +10,14 @@ import re
 # Read up on Python decorators
 # Get parser to handle names ('ID')
 # Padrino vs. Sinatra
-# Why no tuples? (explain)
+# Why no tuples? (explain: tuples vs. lists?)
 # Constants
 # Should reserved keywords each be handled by separate function?
 # Or should they be treated as identifiers?
+# TODO: STATEMENTS, SCOPE
 
 
-""" GLOBALS """
+### GLOBALS ###
 token = None        # contains current token object
 next                # holds next token obj in token_stream
 symbol_table = {}   # store symbol classes
@@ -24,7 +25,7 @@ token_stream = None # does this need to be global?
 # scope             # contains current scope object
 
 
-""" LEXER """
+### LEXER ###
 
 # LexToken(self.type, self.value, self.lineno, self.lexpos)
 
@@ -170,14 +171,15 @@ def t_ID(t):
 
 # Error handling rule
 def t_error(t):
-    print "Invalid character: '%s'" % t.value[0]
+    print #Invalid character: '%s'# % t.value[0]
     t.lexer.skip(1)
 
 
-""" CALL LEXING & PARSING FUNCTIONS """
+### CALL LEXING & PARSING FUNCTIONS ###
 
 def generate_tokens(program):    
     token_stream = []
+    print program
     lexer = lex.lex()       # build lexer
     lexer.input(program)
 
@@ -187,6 +189,9 @@ def generate_tokens(program):
             break           # no more input
         token_stream.append(tokens)  # creating a list rather than generator
     return token_stream             
+
+
+######## TODO: variable names raise KeyError #########
 
 def tokenize(token_stream):
     global symbol_table
@@ -206,7 +211,7 @@ def tokenize(token_stream):
                 # s = NewSymbol(token.type, token.value, token.lineno, token.lexpos)
             elif token.type == "ID":
                 print "SYMBOL IS A NAME/ID", token.value
-                symbol = symbol_table[token.value]
+                symbol = symbol_table[token.type]
                 s = symbol(token.type, token.value, token.lineno, token.lexpos)
                 # s = NewSymbol(token.type, token.value, token.lineno, token.lexpos)
                 # s.value = value
@@ -246,7 +251,7 @@ In example "1 + 2 * 4", you have +, 2, and *. * has higher bp, so it 'wins' 2.
 80  ., [, (
 """
 
-""" EXPRESSION PARSER """
+### EXPRESSION PARSER ###
 def parse_expression(rbp=0):    # default binding power = 0 
     global token
     t = token
@@ -263,13 +268,19 @@ def parse_expression(rbp=0):    # default binding power = 0
     return left
 
 
-""" STATEMENT PARSER """
+### STATEMENT PARSER ###
 # Do I need this?
 def parse_statement(rbp=0):
-    pass
+    global token
+    t = token
+    try:
+        token = next()
+    except StopIteration:
+        pass
 
 
-""" TOKEN CLASSES """
+
+### TOKEN CLASSES ##"
 
 # for numbers and constants
 class Literal(object):
@@ -302,6 +313,8 @@ class BaseSymbol(object):
     def leftd(self, left):
         raise SyntaxError("Unknown operator (%r)." % self.value)
 
+    # def stmtd(self):
+
     """ for error-checking: outputs Py string representation of AST """
     def __repr__(self):
         if self.ttype == "ID" or self.ttype == "NUMBER":
@@ -311,7 +324,7 @@ class BaseSymbol(object):
         return "(" + " ".join(out) + ")"
 
 
-""" SYMBOL FACTORY """
+### SYMBOL FACTORY ###
 
 def symbol(ttype, bp=0):
     try:
@@ -330,7 +343,7 @@ def symbol(ttype, bp=0):
 
 # Register simple tokens to symbol_table
 symbol("(literal)").nulld = lambda self: self
-symbol("(name)").nulld = lambda self: self
+symbol("ID").nulld = lambda self: self
 symbol("NUMBER").nulld = lambda self: self
 symbol(")")
 symbol("]")
@@ -348,7 +361,7 @@ symbol("END")
 """
 
 
-""" BASIC PREFIX OPERATORS """
+### BASIC PREFIX OPERATORS ###
 
 def prefix(ttype, bp):
     def nulld(self):  # attach nodes to nulld method
@@ -362,7 +375,7 @@ prefix("!", 20)
 prefix("-", 20)  # not sure if I'm using this?
 
 
-""" INFIX OPERATORS """
+### INFIX OPERATORS ###
 
 # Helper function for led method: THERE IS A LEFT
 def infix(ttype, bp):
@@ -386,7 +399,7 @@ infix("/", 120)
 infix("%", 120)
 
 
-""" INFIX_R OPERATORS """
+### INFIX_R & ASSIGNMENT OPERATORS ###
 
 def infix_r(ttype, bp):
     def leftd(self, left):
@@ -395,12 +408,15 @@ def infix_r(ttype, bp):
         return self
     symbol(ttype, bp).leftd = leftd
 
-# Register operator symbols to symbol_table
+# Register symbols to symbol_table
+infix_r("=", 10)
+infix_r("+=", 10)
+infix_r("-=", 10)
 infix_r("||", 30)
 infix_r("&&", 40)       # why more than || ?
 infix_r("**", 140)      # why such a high bp?
-infix_r("++")  # postfix?
-infix_r("--")  # postfix?
+infix_r("++", 120)      # postfix?
+infix_r("--", 120)      # postfix?
 
 
 # Helper method to handle LPAREN (first token in expression, NO LEFT)
@@ -444,7 +460,7 @@ def leftd(self, left):
 def nulld(self):
     self.first = []
     if token.value != "]":
-        while 1:  # Add extra 'if' to allow optional trailing commas
+        while True:  # Add extra 'if' to allow optional trailing commas
             if token.value == "]":
                 break
             self.first.append(parse_expression())
@@ -460,7 +476,7 @@ def nulld(self):
 def nulld(self):
     self.first = []
     if token.value != "}":
-        while 1:
+        while True:
             if token.value == "}":
                 break
             self.first.append(parse_expression())
@@ -480,17 +496,13 @@ def leftd(self, left):
     self.first = left
     self.second = []  # Right node will be list of function params
     if token.value != ")":
-        while 1:
+        while True:
             self.second.append(parse_expression())
             if token.value != ",":
                 break
             advance(",")
     advance(")")
     return self
-
-
-
-
 
 
 """
