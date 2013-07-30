@@ -2,6 +2,19 @@ import sys
 import ply.lex as lex
 import re
 
+""" QUESTIONS, TODO """
+# Must I parse statements differently from expressions?
+# How to implement strings?
+# Scope
+# Also need !, ., 
+# Read up on Python decorators
+# Get parser to handle names ('ID')
+# Padrino vs. Sinatra
+# Why no tuples? (explain)
+# Constants
+# Should reserved keywords each be handled by separate function?
+# Or should they be treated as identifiers?
+
 
 """ GLOBALS """
 token = None        # contains current token object
@@ -13,7 +26,6 @@ token_stream = None # does this need to be global?
 
 """ LEXER """
 
-# Also need !, ., 
 # LexToken(self.type, self.value, self.lineno, self.lexpos)
 
 tokens_list = (
@@ -267,8 +279,9 @@ class Literal(object):
     def nulld(self):
         return self  # token literals return themselves
 
+    """ for error-checking: outputs Py string representation of AST """
     def __repr__(self):
-        return "(number %s)" % self.value  # generate parse tree
+        return "(number %s)" % self.value
 
 # base class for operators
 class BaseSymbol(object):
@@ -302,7 +315,7 @@ class BaseSymbol(object):
 
 def symbol(ttype, bp=0):
     try:
-        symbol = symbol_table[ttype]
+        NewSymbol = symbol_table[ttype]
     except KeyError:            # if key missing, create new key/class
         class NewSymbol(BaseSymbol):
             pass                # inherit from BaseSymbol class
@@ -319,23 +332,24 @@ def symbol(ttype, bp=0):
 symbol("(literal)").nulld = lambda self: self
 symbol("(name)").nulld = lambda self: self
 symbol("NUMBER").nulld = lambda self: self
-symbol("END")
-""" COME BACK TO THESE
+symbol(")")
+symbol("]")
+"""
 symbol("(lambda)")
 symbol("if", 20)
 symbol(".", 150)
 symbol("[", 150)
 symbol("(", 150)
-symbol("]")
 symbol("}")
 symbol(",")
-# symbol(":")
+symbol(":")
 symbol("else")
+symbol("END")
 """
-symbol(")")
+
 
 """ BASIC PREFIX OPERATORS """
-"""
+
 def prefix(ttype, bp):
     def nulld(self):  # attach nodes to nulld method
         self.first = parse_expression(bp)  # bp = rbp
@@ -346,7 +360,7 @@ def prefix(ttype, bp):
 # Register operator symbols to symbol_table
 prefix("!", 20)
 prefix("-", 20)  # not sure if I'm using this?
-"""
+
 
 """ INFIX OPERATORS """
 
@@ -358,23 +372,46 @@ def infix(ttype, bp):
         return self
     symbol(ttype, bp).leftd = leftd
 
-# Register operator symbols to symbol_table
-"""
+# Register symbols to symbol_table
 infix("<", 60);
 infix("<=", 60);
 infix(">", 60);
 infix(">=", 60);
 infix("==", 60);
 infix("!=", 60);
-"""
 infix("+", 110)
 infix("-", 110)
 infix("*", 120)
 infix("/", 120)
-# infix("%", 120)
+infix("%", 120)
 
 
-# Helper method (check for errors before fetching next expression)
+""" INFIX_R OPERATORS """
+
+def infix_r(ttype, bp):
+    def leftd(self, left):
+        self.first = left
+        self.second = parse_expression(bp-1)  # still not certain why...
+        return self
+    symbol(ttype, bp).leftd = leftd
+
+# Register operator symbols to symbol_table
+infix_r("||", 30)
+infix_r("&&", 40)       # why more than || ?
+infix_r("**", 140)      # why such a high bp?
+infix_r("++")  # postfix?
+infix_r("--")  # postfix?
+
+
+# Helper method to handle LPAREN (first token in expression, NO LEFT)
+def nulld(self):
+    expression = parse_expression()
+    advance(")")  # check current token for given value before fetching next
+    return expression
+symbol("(").nulld = nulld
+
+
+# Helper method for next (check for errors before fetching next expression)
 def advance(value=None):
     global token
     if value and token.value != value:
@@ -385,27 +422,75 @@ def advance(value=None):
         pass
 
 
-# Helper method to handle LPAREN (first token in expression, NO LEFT)
+# Function decorator to avoid repeating code
+def method(NewSymbol):
+    assert issubclass(NewSymbol, BaseSymbol)
+    def bind(fn):
+        setattr(NewSymbol, fn.__name__, fn)
+    return bind
+
+
+# Helper method to handle LBRACK (item lookup)
+@method(symbol("["))
+def leftd(self, left):
+    self.first = left
+    self.second = parse_expression()
+    advance("]")
+    return self
+
+
+# Lists
+@method(symbol("("))
 def nulld(self):
-    expression = parse_expression()
-    advance(")")  # check current token for given value before fetching next
-    return expression
-symbol("(").nulld = nulld
+    self.first = []
+    if token.value != "]":
+        while 1:  # Add extra 'if' to allow optional trailing commas
+            if token.value == "]":
+                break
+            self.first.append(parse_expression())
+            if token.value != ",":
+                break
+            advance(",")
+    advance("]")
+    return self
 
-""" INFIX_R OPERATORS """
-"""
-def infix_r(ttype, bp):
-    def leftd(self, left):
-        self.first = left
-        self.second = parse_expression(bp-1)  # still not certain why...
-        return self
-    symbol(ttype, bp).leftd = leftd
 
-# Register operator symbols to symbol_table
-infix_r("||", 30)
-infix_r("&&", 40)  # why more than || ?
-infix_r("**", 140)  # why such a high bp?
-"""
+# Dictionaries 
+@method(symbol("{"))
+def nulld(self):
+    self.first = []
+    if token.value != "}":
+        while 1:
+            if token.value == "}":
+                break
+            self.first.append(parse_expression())
+            advance(":")
+            self.first.append(parse_expression())
+            if token.value != ",":
+                break
+            advance(",")
+    advance("}")
+    return self
+# TODO: function definitions, conditional blocks, loops
+
+
+# Function calls: treat LPAREN as binary operator
+@method(symbol("("))
+def leftd(self, left):
+    self.first = left
+    self.second = []  # Right node will be list of function params
+    if token.value != ")":
+        while 1:
+            self.second.append(parse_expression())
+            if token.value != ",":
+                break
+            advance(",")
+    advance(")")
+    return self
+
+
+
+
 
 
 """
