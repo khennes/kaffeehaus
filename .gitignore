@@ -1,4 +1,5 @@
 ply-3.4
+*.swp
 README.md
 style.kh
 *.pyc

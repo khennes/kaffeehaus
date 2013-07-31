@@ -13,6 +13,5 @@ def add(argc int, argv) {  # Require typed parameters/return values? Not sure ye
         $mango = false
         return x
     }
-    # Add for loop here
 }
 
