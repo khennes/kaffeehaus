@@ -9,6 +9,7 @@ import re
 # Constants
 # TODO: STATEMENTS, SCOPE
 # Why does it only parse one line??
+# Opening newlines --> will not parse
 
 
 ### GLOBALS ###
@@ -195,6 +196,7 @@ def tokenize(token_stream):
         s = symbol(token.type, token.value, token.lineno, token.lexpos)
         if not symbol:
             raise SyntaxError("Unknown operator (%r)" % token.type)
+        print "TOKENIZED S: ", s.value
         yield s     # returns a generator
 
 
@@ -206,6 +208,7 @@ def parse(filename=None):
     token_stream = generate_tokens(program)
     next = tokenize(token_stream).next  # what exactly is .next ?
     token = next()
+    print "PARSED!"
     return parse_expression()  
 
 
@@ -339,7 +342,7 @@ def parse_stmts():
 # base class for operators
 class BaseSymbol(object):
     def __init__(self, ttype, value, lineno, lexpos):
-        self.ttype = ttype  # token type
+        self.ttype = ttype
         self.value = value
         self.lineno = lineno
         self.lexpos = lexpos
@@ -389,8 +392,15 @@ symbol("(literal)").nulld = lambda self: self
 symbol("ID").nulld = lambda self: self  # variables and function names
 symbol("NUMBER").nulld = lambda self: self
 symbol(")")
+symbol(",")
 symbol("]")
-symbol("NEWLINE")
+symbol("\n")
+symbol("[", 150)
+symbol("(", 150)
+symbol("int")  # high bp for data typing
+symbol("bool", 120)  # high bp for data typing
+symbol("float", 120)  # high bp for data typing
+
 """
 symbol("(lambda)")
 symbol("if", 20)
@@ -411,6 +421,8 @@ def prefix(ttype, bp):
 # Register operator symbols to symbol_table
 prefix("!", 20)
 prefix("-", 20)  # not sure if I'm using this?
+
+prefix("def", 0)  # no bp? not really sure
 
 
 ### INFIX OPERATORS ###
@@ -447,7 +459,8 @@ def infix_r(ttype, bp):
     symbol(ttype, bp).leftd = leftd
 
 # Register symbols to symbol_table
-infix_r("=", 10)        # why is this infix_r? did i put it here?
+# Assignment operators should maybe have their own helper method
+infix_r("=", 160)        # why is this infix_r? did i put it here?
 infix_r("+=", 10)
 infix_r("-=", 10)
 infix_r("||", 30)
@@ -456,14 +469,15 @@ infix_r("**", 140)      # why such a high bp?
 infix_r("++", 120)      # postfix?
 infix_r("--", 120)      # postfix?
 
-
+"""
 # Helper method to handle LPAREN (first token in expression, NO LEFT)
 def nulld(self):
     expression = parse_expression()
     advance(")")  # check current token for given value before fetching next
+    print "( NULLD"
     return expression
 symbol("(").nulld = nulld
-
+"""
 
 # Helper method to handle reserved keywords & variables?
 def statement(ttype, bp):
@@ -473,7 +487,7 @@ def statement(ttype, bp):
         return self
     symbol(ttype).stmtd = stmtd
 
-statement("def", 20)
+# statement("def", 20)
 statement("if", 20)
 statement("elsif", 20)
 statement("else", 20)
@@ -484,7 +498,6 @@ statement("for", 20)
 statement("while", 20)
 statement("print", 20)
 # symbol("ID").nulld = lambda self: self  # variables and function names
-
 
 
 # Function decorator to avoid repeating code
@@ -503,10 +516,8 @@ def leftd(self, left):
     advance("]")
     return self
 
-
-# Lists
-@method(symbol("("))
-def nulld(self):
+@method(symbol("["))
+def nulld(self):  # for lists
     self.first = []
     if token.value != "]":
         while True:  # Add extra 'if' to allow optional trailing commas
@@ -538,11 +549,25 @@ def nulld(self):
     return self
 # TODO: function definitions, conditional blocks, loops
 
+# Function definitions?
+@method(symbol("{"))
+def leftd(self):
+    self.first = left
+    self.second = parse_expression()
+    if token.value != "}":
+        while True:
+            if token.value == "}":
+                print "EMPTY FUNCTION?"
+            self.second.append(parse_expression())
+            advance("\n")
+    advance("}")
+    return self
 
 # Function calls: treat LPAREN as binary operator
 @method(symbol("("))
 def leftd(self, left):
     self.first = left  # this must be a non-reserved identifier/name
+    # if left != def + function name, raise error?
     self.second = []  # Right node will be list of function params
     if token.value != ")":
         while True:
@@ -551,6 +576,7 @@ def leftd(self, left):
                 break
             advance(",")
     advance(")")
+    print "LEFTD ("
     return self
 
 
