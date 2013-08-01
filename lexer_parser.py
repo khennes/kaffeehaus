@@ -293,17 +293,18 @@ def parse_expression(rbp=0):            # default binding power = 0
     global token
     t = token
     advance()
-    if token.leftbp != None:            # this 'if' from Gulnara's code
-        left = t.nulld()
-        while rbp < token.leftbp:       # keep going till rbp > current token's bp
-            t = token
-            token = next()
-            left = t.leftd(left)
-            print "Parsed an expression!"
-    else:
+    if t.stmtd():
         left = t.stmtd()
         parse_statement()
         print "Parsed a statement!"
+    else:
+        left = t.nulld()
+        if token.leftbp != None:            # this 'if' from Gulnara's code
+            while rbp < token.leftbp:       # keep going till rbp > current token's bp
+                t = token
+                token = next()
+                left = t.leftd(left)
+                print "Parsed an expression!"
     return left
 
 
@@ -317,11 +318,11 @@ def parse_statement():
         advance()
         # scope.reserve(t) - for when scope is implemented
         return t.stmtd()
-#    else:
-#        expression = parse_expression()
-#        advance("\n")
-#        # TODO: if not an assignment and not "(", throw error
-#        return expression
+    else:
+        expression = parse_expression()
+        advance("\n")
+        # TODO: if not an assignment and not "(", throw error
+        return expression
 
 
 # Continue parsing all statements in a row, return list
@@ -395,6 +396,9 @@ def symbol(ttype, bp=0):
 symbol("(literal)").nulld = lambda self: self
 symbol("ID").nulld = lambda self: self  # variables and function names
 symbol("NUMBER").nulld = lambda self: self
+symbol("int").nulld = lambda self: self
+symbol("bool").nulld = lambda self: self
+symbol("float").nulld = lambda self: self
 symbol(")")
 symbol(",")
 symbol("]")
@@ -403,9 +407,6 @@ symbol("\n")
 symbol("[", 150)
 symbol("(", 150)
 symbol(".", 150)
-symbol("int").nulld = lambda self: self
-symbol("bool")
-symbol("float")
 # symbol("else")
 
 
@@ -471,12 +472,11 @@ infix_r("**", 140)      # why such a high bp?
 # Helper method to handle reserved keywords & variables?
 def statement(ttype, bp):
     def stmtd(self):
-        self.first = self 
-        self.second = parse_stmts()
+        self.first = parse_stmts() 
+        self.second = None  # ?? 
         return self
     symbol(ttype).stmtd = stmtd
 
-# statement("def", 20)
 statement("if", 20)
 statement("elsif", 20)
 statement("else", 20)
