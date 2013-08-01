@@ -196,7 +196,7 @@ def tokenize(token_stream):
         s = symbol(token.type, token.value, token.lineno, token.lexpos)
         if not symbol:
             raise SyntaxError("Unknown operator (%r)" % token.type)
-        print "TOKENIZED S: ", s.value
+        print "TOKENIZED S: ", s.ttype, s.value
         yield s     # returns a generator
 
 
@@ -208,7 +208,6 @@ def parse(filename=None):
     token_stream = generate_tokens(program)
     next = tokenize(token_stream).next  # what exactly is .next ?
     token = next()
-    print "PARSED!"
     return parse_expression()  
 
 
@@ -277,10 +276,15 @@ In example "1 + 2 * 4", you have +, 2, and *. * has higher bp, so it 'wins' 2.
 ### ADVANCE ###
 # Check for errors before fetching next expression
 
+### TODO: Make token ttype/value consistent across program... when you have time
 def advance(value=None):
     global token
-    if value and token.value != value:
-        raise SyntaxError("Expected %r" % value)
+    if value:
+        if token.ttype == "ID": 
+            if token.ttype != value:
+                raise SyntaxError("Expected %r" % value)
+        elif token.value != value:
+            raise SyntaxError("Expected %r" % value)
     try:
         token = next()
     except StopIteration:
@@ -294,13 +298,15 @@ def parse_expression(rbp=0):        # default binding power = 0
     t = token
     advance()
     left = t.nulld()
-    if token.leftbp != None:        # this 'if' from Gulnara's code
-        while rbp < token.leftbp:   # keep going till rbp > current token's bp
-            t = token
-            token = next()
-            left = t.leftd(left)
-    else:
+    # if token.leftbp != None:      # this 'if' from Gulnara's code
+    while rbp < token.leftbp:       # keep going till rbp > current token's bp
+        t = token
+        token = next()
+        left = t.leftd(left)
+        print "Parsed an expression!"
+    if token.leftbp == None:
         parse_statement()
+        print "Parsed a statement!"
     return left
 
 
@@ -325,7 +331,7 @@ def parse_statement():
 def parse_stmts():
     stmtlist = []
     while True:
-        if token.value == "}" or token.value == "(end)":
+        if token.value == "}":  # or token.value == "(end)":
             break
         s = parse_statement()
         if s:
@@ -394,6 +400,7 @@ symbol("NUMBER").nulld = lambda self: self
 symbol(")")
 symbol(",")
 symbol("]")
+symbol("}")
 symbol("\n")
 symbol("[", 150)
 symbol("(", 150)
@@ -422,7 +429,8 @@ def prefix(ttype, bp):
 prefix("!", 20)
 prefix("-", 20)  # not sure if I'm using this?
 
-prefix("def", 0)  # no bp? not really sure
+# prefix("def", 0)  # no bp? not really sure
+
 
 
 ### INFIX OPERATORS ###
@@ -549,17 +557,30 @@ def nulld(self):
     return self
 # TODO: function definitions, conditional blocks, loops
 
-# Function definitions?
-@method(symbol("{"))
-def leftd(self):
-    self.first = left
-    self.second = parse_expression()
-    if token.value != "}":
+
+########## How to treat function declarations? Is prefix "def" the operative
+########## symbol, and all other tokens, (, [arguments], ), {, and } all
+########## parsed as part of the same expression/statement?
+
+# Function declarations with "def"
+@method(symbol("def"))
+def nulld(self):
+    advance("ID")
+    arguments = []
+    advance("(")
+    if token.value != ")":
         while True:
-            if token.value == "}":
-                print "EMPTY FUNCTION?"
-            self.second.append(parse_expression())
-            advance("\n")
+            if token.value == ")":
+                break
+            arguments.append(parse_expression())
+            if token.value != ",":
+                break
+            advance(",")
+    self.first = arguments
+    advance(")")
+    advance("{")
+    advance()
+    self.second = parse_expression()
     advance("}")
     return self
 
