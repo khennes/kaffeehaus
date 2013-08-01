@@ -3,20 +3,16 @@ import ply.lex as lex
 import re
 
 """ QUESTIONS, TODO """
-# How to implement strings?
 # Also need !, . 
 # Why no tuples? (explain: tuples vs. lists?)
 # Constants
-# TODO: STATEMENTS, SCOPE
-# Why does it only parse one line??
-# Opening newlines --> will not parse
+# TODO: SCOPE
 
 
 ### GLOBALS ###
 token = None        # contains current token object
 next                # holds next token obj in token_stream
-symbol_table = {}   # store symbol classes
-token_stream = None # does this need to be global?
+symbol_table = {}   # store instantiated symbol classes
 scope = None        # contains current scope object
 
 
@@ -79,7 +75,7 @@ reserved = { 'if' : 'IF',
     'float' : 'FLOAT',
     'struct' : 'STRUCT',
     'char' : 'CHAR', 
-    'string' : 'STRING',  # Undecided how to implement (most likely as struct)
+    'string' : 'STRING',
     'array' : 'ARRAY',
     'break' : 'BREAK',
     'continue' : 'CONTINUE',
@@ -171,7 +167,10 @@ def t_error(t):
 
 ### CALL LEXING & PARSING FUNCTIONS ###
 
+
+# TODO: need to generate (end) token?
 def generate_tokens(program):    
+    print program
     token_stream = []
     lexer = lex.lex()
     lexer.input(program)
@@ -182,7 +181,6 @@ def generate_tokens(program):
             break
         token_stream.append(tokens)
     return token_stream             
-# TODO: need to generate (end) token?
 
 
 def tokenize(token_stream):
@@ -217,8 +215,7 @@ class Rule(object):
     def nulld(self, ....):
         raise NotImplementedError
 
-class Scope(object):
-
+class Scope:
     def __init__(ttype):
         self.ttype = ttype  # new variable
         self.parent = None
@@ -233,7 +230,6 @@ class Scope(object):
     
     def find(self, token_name):
         while True:
-            
     
     def pop(self):  # close scope, return focus to parent
         global scope
@@ -293,18 +289,19 @@ def advance(value=None):
 
 ### EXPRESSION PARSER ###
 
-def parse_expression(rbp=0):        # default binding power = 0 
+def parse_expression(rbp=0):            # default binding power = 0 
     global token
     t = token
     advance()
-    left = t.nulld()
-    # if token.leftbp != None:      # this 'if' from Gulnara's code
-    while rbp < token.leftbp:       # keep going till rbp > current token's bp
-        t = token
-        token = next()
-        left = t.leftd(left)
-        print "Parsed an expression!"
-    if token.leftbp == None:
+    if token.leftbp != None:            # this 'if' from Gulnara's code
+        left = t.nulld()
+        while rbp < token.leftbp:       # keep going till rbp > current token's bp
+            t = token
+            token = next()
+            left = t.leftd(left)
+            print "Parsed an expression!"
+    else:
+        left = t.stmtd()
         parse_statement()
         print "Parsed a statement!"
     return left
@@ -320,24 +317,25 @@ def parse_statement():
         advance()
         # scope.reserve(t) - for when scope is implemented
         return t.stmtd()
-    else:
-        expression = parse_expression()
-        advance("\n")
-        # TODO: if not an assignment and not "(", throw error
-        return expression
+#    else:
+#        expression = parse_expression()
+#        advance("\n")
+#        # TODO: if not an assignment and not "(", throw error
+#        return expression
 
 
 # Continue parsing all statements in a row, return list
 def parse_stmts():
     stmtlist = []
-    while True:
-        if token.value == "}":  # or token.value == "(end)":
-            break
-        s = parse_statement()
-        if s:
-            stmtlist.append(s)
+    if token.value != "}":
+        while True:
+            if token.value == "}":  # or token.value == "(end)":
+                break
+            s = parse_statement()
+            if s:
+                stmtlist.append(s)
     if len(stmtlist) == 0:
-        stmtlist = null
+        stmtlist = None
     elif len(stmtlist) == 1:
         stmtlist = stmtlist[0]
     return stmtlist
@@ -346,7 +344,7 @@ def parse_stmts():
 ### TOKEN CLASSES ###
 
 # base class for operators
-class BaseSymbol(object):
+class BaseSymbol:
     def __init__(self, ttype, value, lineno, lexpos):
         self.ttype = ttype
         self.value = value
@@ -404,16 +402,11 @@ symbol("}")
 symbol("\n")
 symbol("[", 150)
 symbol("(", 150)
-symbol("int")  # high bp for data typing
-symbol("bool", 120)  # high bp for data typing
-symbol("float", 120)  # high bp for data typing
-
-"""
-symbol("(lambda)")
-symbol("if", 20)
-symbol("else")
-symbol("END")
-"""
+symbol(".", 150)
+symbol("int").nulld = lambda self: self
+symbol("bool")
+symbol("float")
+# symbol("else")
 
 
 ### BASIC PREFIX OPERATORS ###
@@ -426,16 +419,13 @@ def prefix(ttype, bp):
     symbol(ttype).nulld = nulld  # attach nulld method to symbol, add to symbol_table
 
 # Register operator symbols to symbol_table
-prefix("!", 20)
-prefix("-", 20)  # not sure if I'm using this?
-
-# prefix("def", 0)  # no bp? not really sure
-
+# prefix("!", 20)
+prefix("-", 130)  # not sure if I'm using this?
 
 
 ### INFIX OPERATORS ###
 
-# Helper method for led method: THERE IS A LEFT
+# Helper method for leftd method: THERE IS A LEFT
 def infix(ttype, bp):
     def leftd(self, left):
         self.first = left
@@ -455,7 +445,7 @@ infix("-", 110)
 infix("*", 120)
 infix("/", 120)
 infix("%", 120)
-
+infix("=", 10) 
 
 ### INFIX_R & ASSIGNMENT OPERATORS ###
 
@@ -468,30 +458,21 @@ def infix_r(ttype, bp):
 
 # Register symbols to symbol_table
 # Assignment operators should maybe have their own helper method
-infix_r("=", 160)        # why is this infix_r? did i put it here?
+# infix_r("=", 10)        # why is this infix_r? did i put it here?
 infix_r("+=", 10)
 infix_r("-=", 10)
 infix_r("||", 30)
 infix_r("&&", 40)       # why more than || ?
 infix_r("**", 140)      # why such a high bp?
-infix_r("++", 120)      # postfix?
-infix_r("--", 120)      # postfix?
+# infix_r("++", 120)      # postfix?
+# infix_r("--", 120)      # postfix?
 
-"""
-# Helper method to handle LPAREN (first token in expression, NO LEFT)
-def nulld(self):
-    expression = parse_expression()
-    advance(")")  # check current token for given value before fetching next
-    print "( NULLD"
-    return expression
-symbol("(").nulld = nulld
-"""
 
 # Helper method to handle reserved keywords & variables?
 def statement(ttype, bp):
     def stmtd(self):
         self.first = self 
-        self.second = parse_statement()
+        self.second = parse_stmts()
         return self
     symbol(ttype).stmtd = stmtd
 
@@ -523,9 +504,9 @@ def leftd(self, left):
     self.second = parse_expression()
     advance("]")
     return self
-
+# For lists - how to distinguish?
 @method(symbol("["))
-def nulld(self):  # for lists
+def nulld(self):
     self.first = []
     if token.value != "]":
         while True:  # Add extra 'if' to allow optional trailing commas
@@ -579,31 +560,25 @@ def nulld(self):
     self.first = arguments
     advance(")")
     advance("{")
-    advance()
-    self.second = parse_expression()
-    advance("}")
-    return self
-
-# Function calls: treat LPAREN as binary operator
-@method(symbol("("))
-def leftd(self, left):
-    self.first = left  # this must be a non-reserved identifier/name
-    # if left != def + function name, raise error?
-    self.second = []  # Right node will be list of function params
-    if token.value != ")":
+    if token.value == "\n":
+        advance() 
+    expressions = []
+    if token.value != "}":
         while True:
-            self.second.append(parse_expression())
-            if token.value != ",":
+            if token.value == "}":
                 break
-            advance(",")
-    advance(")")
-    print "LEFTD ("
+            expressions.append(parse_expression())
+            if token.value == "\n":
+                advance() 
+    self.second = expressions
+    advance("\n")
+    advance("}")
     return self
 
 
 """
 def main():
-    parse()
+    parse(small.kh)
 
 if __name__ == "__main__":
     main()
