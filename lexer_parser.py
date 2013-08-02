@@ -208,10 +208,11 @@ def parse(filename=None):
     token = next()
     while token: 
         expression = parse_expression()  
+        print expression
         expression_list.append(expression)
         if not token:
             break
-        advance()
+        # advance()
         # advance("\n")
     return expression_list
 
@@ -298,19 +299,19 @@ def parse_expression(rbp=0):            # default binding power = 0
     global token
     t = token
     advance()
-    if t.stmtd():
+    if hasattr(t, "stmtd"):  # removed (), stuck in infinite loop
         left = t.stmtd()
-        parse_statement()
-        print "Parsed a statement!"
+        print "(Statement) LEFT: ", left
+        return left
     else:
-        left = t.nulld()
         if token.leftbp != None:            # this 'if' from Gulnara's code
+            left = t.nulld()
             while rbp < token.leftbp:       # keep going till rbp > current token's bp
                 t = token
                 token = next()
                 left = t.leftd(left)
-                print "Parsed an expression!"
-    return left
+                print "LEFT: ", left
+                return left
 
 
 ### STATEMENT PARSER ###
@@ -319,15 +320,15 @@ def parse_expression(rbp=0):            # default binding power = 0
 def parse_statement():
     global token
     t = token
-    if t.stmtd:
-        advance()
+    # if t.stmtd:
+    advance()
         # scope.reserve(t) - for when scope is implemented
-        return t.stmtd()
-    else:
-        expression = parse_expression()
-        advance("\n")
-        # TODO: if not an assignment and not "(", throw error
-        return expression
+    return t.stmtd()
+    # else:
+    #    expression = parse_expression()
+    #    advance("\n")
+    #    # TODO: if not an assignment and not "(", throw error
+    #    return expression
 
 
 # Continue parsing all statements in a row, return list
@@ -362,8 +363,8 @@ class BaseSymbol:
     second = None
     third = None
 
-    def stmtd(self):
-        pass
+    # def stmtd(self):
+    #    pass
 
     def nulld(self):
         raise SyntaxError("Syntax error (%r)." % self.value)
@@ -546,7 +547,7 @@ def nulld(self):
 
 # Function declarations with "def"
 @method(symbol("def"))
-def nulld(self):
+def stmtd(self):
     advance("ID")
     arguments = []
     advance("(")
@@ -566,10 +567,10 @@ def nulld(self):
     expressions = []
     if token.value != "}":
         while True:
+            expressions.append(parse_expression())  # NEWLINE GETTING STUCK HERE
             if token.value == "}":
                 break
-            expressions.append(parse_expression())
-            if token.value == "\n":
+            elif token.value == "\n":
                 advance() 
     self.second = expressions
     advance("\n")
