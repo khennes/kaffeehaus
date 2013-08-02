@@ -7,6 +7,7 @@ import re
 # Why no tuples? (explain: tuples vs. lists?)
 # Constants
 # TODO: SCOPE
+# TODO: Make token ttype/value consistent across program... when you have time
 
 
 ### GLOBALS ###
@@ -167,8 +168,6 @@ def t_error(t):
 
 ### CALL LEXING & PARSING FUNCTIONS ###
 
-
-# TODO: need to generate (end) token?
 def generate_tokens(program):    
     print program
     token_stream = []
@@ -195,19 +194,26 @@ def tokenize(token_stream):
         if not symbol:
             raise SyntaxError("Unknown operator (%r)" % token.type)
         print "TOKENIZED S: ", s.ttype, s.value
-        yield s     # returns a generator
+        yield s  # returns a generator
 
 
 def parse(filename=None):
     global token, next 
+    expression_list = []
     if not filename:
         filename = raw_input("> ")
     program = open(filename).read()
     token_stream = generate_tokens(program)
     next = tokenize(token_stream).next  # what exactly is .next ?
     token = next()
-    return parse_expression()  
-
+    while token: 
+        expression = parse_expression()  
+        expression_list.append(expression)
+        if not token:
+            break
+        advance()
+        # advance("\n")
+    return expression_list
 
 """
 ### SCOPE ###
@@ -272,7 +278,6 @@ In example "1 + 2 * 4", you have +, 2, and *. * has higher bp, so it 'wins' 2.
 ### ADVANCE ###
 # Check for errors before fetching next expression
 
-### TODO: Make token ttype/value consistent across program... when you have time
 def advance(value=None):
     global token
     if value:
@@ -539,10 +544,6 @@ def nulld(self):
 # TODO: function definitions, conditional blocks, loops
 
 
-########## How to treat function declarations? Is prefix "def" the operative
-########## symbol, and all other tokens, (, [arguments], ), {, and } all
-########## parsed as part of the same expression/statement?
-
 # Function declarations with "def"
 @method(symbol("def"))
 def nulld(self):
@@ -576,10 +577,8 @@ def nulld(self):
     return self
 
 
-"""
 def main():
-    parse(small.kh)
+    parse()
 
 if __name__ == "__main__":
     main()
-"""
