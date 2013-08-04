@@ -183,7 +183,13 @@ def generate_tokens(program):
 
 def tokenize(token_stream):
     global symbol_table
-    print token_stream
+    
+    # ugly hack to remove leading, trailing newlines
+    while token_stream[0].type == "NEWLINE":  
+        del token_stream[0]
+    while token_stream[-1].type == "NEWLINE":
+        del token_stream[-1]
+
     for token in token_stream:
         if token.type == "NUMBER" or token.type == "ID":
             symbol = symbol_table[token.type]
@@ -197,84 +203,24 @@ def tokenize(token_stream):
 
 def parse(filename=None):
     global token, next 
+    expression_list = []
     if not filename:
         filename = raw_input("> ")
-    program = open(filename).read()
+    program = open(filename).read()  # change to readline for better error checking?
     token_stream = generate_tokens(program)
-    next = tokenize(token_stream).next  # what exactly is .next ?
+    next = tokenize(token_stream).next
     token = next()
-    expression_list = []
+
     while token: 
-        # if token == "\n":
-        #     token = next()
         expression = parse_expression()  
         if not token:
             break
         expression_list.append(expression)
     return expression_list
 
-"""
-### SCOPE ###
-class Rule(object):
-    def nulld(self, ....):
-        raise NotImplementedError
-
-class Scope:
-    def __init__(ttype):
-        self.ttype = ttype  # new variable
-        self.parent = None
-
-    def define(self):
-        if 
-        ttype.reserved = False
-        ttype.nulld = itself  # what
-        ttype.leftd = null
-        ttype.leftbp = 0
-        ttype.scope = scope
-    
-    def find(self, token_name):
-        while True:
-    
-    def pop(self):  # close scope, return focus to parent
-        global scope
-        s = scope
-        scope = s.parent
-        # return?
-
-    def reserve():
-        global token
-        t = token
-        if t.reserved or t.type in reserved.values():
-            return
-        
-
-def new_scope():
-    # if token.id == "ID" and token is not reserved keyword
-    global scope, token
-    s = scope
-    scope = Scope(token.value) 
-"""
-
-"""
-BINDING POWERS (from Crockford)
-* nulld used by values (literals, variables) & prefix operators
-* leftd used by infix & suffix operators
-* binding power = how tightly expression binds to tokens on right side
-In example "1 + 2 * 4", you have +, 2, and *. * has higher bp, so it 'wins' 2.
-
-0   nonbinding ;
-10  assignment =
-20  ?
-30  ||, &&
-40  relational ===
-50  +, -
-60  *, /
-70  unary !
-80  ., [, (
-"""
 
 ### ADVANCE ###
-# Check for errors before fetching next expression
+# Check for errors before fetching next token
 
 def advance(value=None):
     global token
@@ -292,17 +238,16 @@ def advance(value=None):
 
 ### EXPRESSION PARSER ###
 
-def parse_expression(rbp=0):            # default binding power = 0 
+def parse_expression(rbp=0):
     global token
     t = token
     advance()
     if hasattr(t, "stmtd"):
         left = t.stmtd()
-        print "(Statement) LEFT: ", left
         return left
     else:
         left = t.nulld()
-        while rbp < token.leftbp:       # keep going till rbp > current token's bp
+        while rbp < token.leftbp:  # keep going till rbp > current token's bp
             t = token
             token = next()
             left = t.leftd(left)
@@ -316,7 +261,6 @@ def parse_expression(rbp=0):            # default binding power = 0
 def parse_statement():
     global token
     t = token
-    # token = next()
     return t.stmtd()
 
 
@@ -351,7 +295,9 @@ class BaseSymbol:
 
 
 ### SYMBOL FACTORY ###
-# creates new symbol classes as needed #
+# Creates new symbol classes as needed
+# Binding power: how tightly expression binds to tokens on right side
+# Ex. "1 + 2 * 4", * has higher bp, so it 'wins' 2.
 
 def symbol(ttype, bp=0):
     try:
@@ -368,11 +314,8 @@ def symbol(ttype, bp=0):
     return NewSymbol
 
 # Register simple tokens to symbol_table
-symbol("(literal)").nulld = lambda self: self
 symbol("ID").nulld = lambda self: self  # variables and function names
 symbol("NUMBER").nulld = lambda self: self
-symbol("bool").nulld = lambda self: self
-symbol("float").nulld = lambda self: self
 symbol(")")
 symbol(",")
 symbol("]")
@@ -381,7 +324,6 @@ symbol("\n")
 symbol("[", 150)
 symbol("(", 150)
 symbol(".", 150)
-# symbol("else")
 
 
 ### BASIC PREFIX OPERATORS ###
@@ -422,6 +364,9 @@ infix("/", 120)
 infix("%", 120)
 # infix("=", 10) 
 symbol("int").nulld = lambda self: self
+symbol("bool").nulld = lambda self: self
+symbol("float").nulld = lambda self: self
+symbol("char").nulld = lambda self: self
 
 
 ### INFIX_R & ASSIGNMENT OPERATORS ###
@@ -435,7 +380,7 @@ def infix_r(ttype, bp):
 
 # Register symbols to symbol_table
 # Assignment operators should maybe have their own helper method
-infix_r("=", 10)        # why is this infix_r? did i put it here?
+infix_r("=", 10)
 infix_r("+=", 10)
 infix_r("-=", 10)
 infix_r("||", 30)
@@ -443,25 +388,6 @@ infix_r("&&", 40)
 infix_r("**", 140)
 # infix_r("++", 120)      # postfix?
 # infix_r("--", 120)      # postfix?
-
-
-# Helper method to handle reserved keywords & variables?
-def statement(ttype, bp):
-    def stmtd(self):
-        self.first = parse_expression() 
-        self.second = None
-        return self
-    symbol(ttype).stmtd = stmtd
-
-statement("if", 20)
-statement("elsif", 20)
-statement("else", 20)
-statement("break", 20)
-statement("continue", 20)
-statement("return", 20)
-statement("for", 20)
-statement("while", 20)
-statement("print", 20)
 
 
 # Function decorator to avoid repeating code
@@ -513,6 +439,117 @@ def nulld(self):
     return self
 
 
+# Helper method to handle reserved keywords & variables?
+def statement(ttype, bp):
+    def stmtd(self):
+        self.first = parse_expression() 
+        self.second = None
+        return self
+    symbol(ttype).stmtd = stmtd
+
+statement("break", 0)
+statement("continue", 0)
+statement("return", 20)
+statement("for", 20)
+statement("print", 20)
+statement("elsif", 20)
+statement("else", 20)
+
+
+@method(symbol("while"))
+def stmtd(self):
+    advance()
+    condition = parse_expression()
+    self.first = condition
+    advance("{")
+    if token == "\n":
+        advance()
+    expressions = []
+    if token.value != "}":
+        while True:
+            expressions.append(parse_expression())
+            if token == "\n":
+                advance()
+            if token.value == "}":
+                break
+    self.second = expressions
+    advance("}")
+    
+
+@method(symbol("if"))
+def stmtd(self):
+    condition = parse_expression()
+    self.first = condition
+    advance("{")
+    if token == "\n":
+        advance()
+    expressions = []
+    if token.value != "}":
+        while True:
+            expressions.append(parse_expression())
+            if token == "\n":
+                advance()
+            if token.value == "}":
+                break
+    self.second = expressions
+    advance("}")
+    if token == "elsif":
+        advance("{")
+        expressions = []
+        if token.value != "}":
+            while True:
+                expressions.append(parse_expression())
+                if token == "\n":
+                    advance()
+                if token.value == "}":
+                    break
+    advance("}")
+    if token == "else":
+        advance("{")
+        if token == "\n":
+            advance()
+        if token.value != "}":
+            while True:
+                expressions.append(parse_expression())
+                if token == "\n":
+                    advance()
+                if token.value == "}":
+                    break
+    advance("}")
+    return self
+
+"""
+@method(symbol("elsif"))
+def stmtd(self):
+    condition = parse_expression()
+    self.first = condition
+    advance("{")
+    expressions = []
+    if token.value != "}":
+        while True:
+            expressions.append(parse_expression())
+            if token.value == "}":
+                break
+    self.second = expressions
+    advance("}")
+    return self
+
+@method(symbol("else"))
+def stmtd(self):
+    condition = parse_expression()
+    self.first = condition
+    advance("{")
+    expressions = []
+    if token.value != "}":
+        while True:
+            expressions.append(parse_expression())
+            if token.value == "}":
+                break
+    self.second = expressions
+    advance("}")
+    return self
+""" 
+
 # Function declarations with "def"
 @method(symbol("def"))
 def stmtd(self):
@@ -537,11 +574,11 @@ def stmtd(self):
             expression = parse_expression()
             if token.value == "\n":
                 advance()
-            expressions.append(expression)  # NEWLINE GETTING STUCK HERE
+            expressions.append(expression)
             if token.value == "}":
                 break 
-    advance("}")
     self.second = expressions
+    advance("}")
     return self
 
 
@@ -550,3 +587,46 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+"""
+### SCOPE ###
+class Rule(object):
+    def nulld(self, ....):
+        raise NotImplementedError
+
+class Scope:
+    def __init__(ttype):
+        self.ttype = ttype  # new variable
+        self.parent = None
+
+    def define(self):
+        if 
+        ttype.reserved = False
+        ttype.nulld = itself  # what
+        ttype.leftd = null
+        ttype.leftbp = 0
+        ttype.scope = scope
+    
+    def find(self, token_name):
+        while True:
+    
+    def pop(self):  # close scope, return focus to parent
+        global scope
+        s = scope
+        scope = s.parent
+        # return?
+
+    def reserve():
+        global token
+        t = token
+        if t.reserved or t.type in reserved.values():
+            return
+        
+
+def new_scope():
+    # if token.id == "ID" and token is not reserved keyword
+    global scope, token
+    s = scope
+    scope = Scope(token.value) 
+"""
