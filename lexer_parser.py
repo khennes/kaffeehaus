@@ -87,11 +87,11 @@ reserved = { 'if' : 'IF',
 
 # Build list of tokens + reserved keywords
 tokens = [ 'NUMBER', 'PLUS', 'MINUS', 'TIMES', 'DIVIDE', 'POWER', 'MODULO',
-            'DOT', 'INCREMENT', 'DECREMENT', 'EQUALS', 'ISEQ', 'ISNOTEQ', 'GREATER',
-            'LESS', 'LESSEQ', 'GREATEQ', 'BOOLAND', 'BOOLOR', 'NEWLINE', 'COMMA', 'LBRACK',
-            'RBRACK', 'LBRACE', 'RBRACE', 'LPAREN', 'RPAREN', 'GLOBAL',
-            'DEFCONST', 'INCLUDE', 'COMMENT', 'ID', 'HASH', 'STCOMM', 'ENDCOMM'
-            ] + list(reserved.values())
+            'DOT', 'INCREMENT', 'DECREMENT', 'EQUALS', 'ISEQ', 'ISNOTEQ',
+            'GREATER', 'LESS', 'LESSEQ', 'GREATEQ', 'BOOLAND', 'BOOLOR', 
+            'NEWLINE', 'COMMA', 'LBRACK', 'RBRACK', 'LBRACE', 'RBRACE', 
+            'LPAREN', 'RPAREN', 'GLOBAL', 'DEFCONST', 'INCLUDE', 'COMMENT',
+            'ID', 'HASH', 'STCOMM', 'ENDCOMM'] + list(reserved.values())
 
 
 # Regular expression rules for simple tokens and reserved keywords
@@ -126,7 +126,6 @@ t_STCOMM    = r'\/\*'
 t_ENDCOMM   = r'\*\/'
 
 """
-t_NUMBER matches numbers and converts string -> Python integer
 Function documentation string: takes single argument (instance of LexToken)
 LexToken attributes:
 * t.type: token type (as str); defaults to name following t_ prefix 
@@ -136,8 +135,9 @@ LexToken attributes:
 """
 
 # Ignore tabs, spaces 
-t_ignore = ' \t'
+t_ignore = ' \t\v'
 
+# t_NUMBER matches numbers and converts string -> Python integer
 def t_NUMBER(t):
     r'\d+' 
     t.value = int(t.value)
@@ -173,7 +173,6 @@ def generate_tokens(program):
     token_stream = []
     lexer = lex.lex()
     lexer.input(program)
-
     while True:
         tokens = lexer.token()
         if not tokens:
@@ -193,27 +192,25 @@ def tokenize(token_stream):
         s = symbol(token.type, token.value, token.lineno, token.lexpos)
         if not symbol:
             raise SyntaxError("Unknown operator (%r)" % token.type)
-        print "TOKENIZED S: ", s.ttype, s.value
-        yield s  # returns a generator
+        yield s
 
 
 def parse(filename=None):
     global token, next 
-    expression_list = []
     if not filename:
         filename = raw_input("> ")
     program = open(filename).read()
     token_stream = generate_tokens(program)
     next = tokenize(token_stream).next  # what exactly is .next ?
     token = next()
+    expression_list = []
     while token: 
+        # if token == "\n":
+        #     token = next()
         expression = parse_expression()  
-        print expression
-        expression_list.append(expression)
         if not token:
             break
-        # advance()
-        # advance("\n")
+        expression_list.append(expression)
     return expression_list
 
 """
@@ -299,53 +296,28 @@ def parse_expression(rbp=0):            # default binding power = 0
     global token
     t = token
     advance()
-    if hasattr(t, "stmtd"):  # removed (), stuck in infinite loop
+    if hasattr(t, "stmtd"):
         left = t.stmtd()
         print "(Statement) LEFT: ", left
         return left
     else:
-        if token.leftbp != None:            # this 'if' from Gulnara's code
-            left = t.nulld()
-            while rbp < token.leftbp:       # keep going till rbp > current token's bp
-                t = token
-                token = next()
-                left = t.leftd(left)
-                print "LEFT: ", left
-                return left
+        left = t.nulld()
+        while rbp < token.leftbp:       # keep going till rbp > current token's bp
+            t = token
+            token = next()
+            left = t.leftd(left)
+            print "LEFT: ", left
+            return left
 
 
 ### STATEMENT PARSER ###
 
-# Parse a single statement at a time
+# Parse a single statement
 def parse_statement():
     global token
     t = token
-    # if t.stmtd:
-    advance()
-        # scope.reserve(t) - for when scope is implemented
+    # token = next()
     return t.stmtd()
-    # else:
-    #    expression = parse_expression()
-    #    advance("\n")
-    #    # TODO: if not an assignment and not "(", throw error
-    #    return expression
-
-
-# Continue parsing all statements in a row, return list
-def parse_stmts():
-    stmtlist = []
-    if token.value != "}":
-        while True:
-            if token.value == "}":  # or token.value == "(end)":
-                break
-            s = parse_statement()
-            if s:
-                stmtlist.append(s)
-    if len(stmtlist) == 0:
-        stmtlist = None
-    elif len(stmtlist) == 1:
-        stmtlist = stmtlist[0]
-    return stmtlist
 
 
 ### TOKEN CLASSES ###
@@ -363,14 +335,11 @@ class BaseSymbol:
     second = None
     third = None
 
-    # def stmtd(self):
-    #    pass
-
     def nulld(self):
-        raise SyntaxError("Syntax error (%r)." % self.value)
+        raise SyntaxError("Syntax error: %r, line %r." % (self.value, self.lineno))
 
     def leftd(self, left):
-        raise SyntaxError("Unknown operator (%r)." % self.value)
+        raise SyntaxError("Unknown operator: %r, line %r." % (self.value, self.lineno))
 
     """ outputs Py string representation of parse tree """
     def __repr__(self):
@@ -388,8 +357,8 @@ def symbol(ttype, bp=0):
     try:
         NewSymbol = symbol_table[ttype]
     except KeyError:            # if key missing, create new key/class
-        class NewSymbol(BaseSymbol):
-            pass                # inherit from BaseSymbol class
+        class NewSymbol(BaseSymbol):  # inherit from BaseSymbol class
+            pass                
         NewSymbol.__name__ = "symbol-" + ttype  # for debugging
         NewSymbol.ttype = ttype
         NewSymbol.leftbp = bp
@@ -402,7 +371,6 @@ def symbol(ttype, bp=0):
 symbol("(literal)").nulld = lambda self: self
 symbol("ID").nulld = lambda self: self  # variables and function names
 symbol("NUMBER").nulld = lambda self: self
-symbol("int").nulld = lambda self: self
 symbol("bool").nulld = lambda self: self
 symbol("float").nulld = lambda self: self
 symbol(")")
@@ -427,7 +395,7 @@ def prefix(ttype, bp):
 
 # Register operator symbols to symbol_table
 # prefix("!", 20)
-prefix("-", 130)  # not sure if I'm using this?
+prefix("-", 130)
 
 
 ### INFIX OPERATORS ###
@@ -452,7 +420,9 @@ infix("-", 110)
 infix("*", 120)
 infix("/", 120)
 infix("%", 120)
-infix("=", 10) 
+# infix("=", 10) 
+symbol("int").nulld = lambda self: self
+
 
 ### INFIX_R & ASSIGNMENT OPERATORS ###
 
@@ -465,12 +435,12 @@ def infix_r(ttype, bp):
 
 # Register symbols to symbol_table
 # Assignment operators should maybe have their own helper method
-# infix_r("=", 10)        # why is this infix_r? did i put it here?
+infix_r("=", 10)        # why is this infix_r? did i put it here?
 infix_r("+=", 10)
 infix_r("-=", 10)
 infix_r("||", 30)
-infix_r("&&", 40)       # why more than || ?
-infix_r("**", 140)      # why such a high bp?
+infix_r("&&", 40)
+infix_r("**", 140)
 # infix_r("++", 120)      # postfix?
 # infix_r("--", 120)      # postfix?
 
@@ -478,8 +448,8 @@ infix_r("**", 140)      # why such a high bp?
 # Helper method to handle reserved keywords & variables?
 def statement(ttype, bp):
     def stmtd(self):
-        self.first = parse_stmts() 
-        self.second = None  # ?? 
+        self.first = parse_expression() 
+        self.second = None
         return self
     symbol(ttype).stmtd = stmtd
 
@@ -492,7 +462,6 @@ statement("return", 20)
 statement("for", 20)
 statement("while", 20)
 statement("print", 20)
-# symbol("ID").nulld = lambda self: self  # variables and function names
 
 
 # Function decorator to avoid repeating code
@@ -542,7 +511,6 @@ def nulld(self):
             advance(",")
     advance("}")
     return self
-# TODO: function definitions, conditional blocks, loops
 
 
 # Function declarations with "def"
@@ -562,19 +530,18 @@ def stmtd(self):
     self.first = arguments
     advance(")")
     advance("{")
-    if token.value == "\n":
-        advance() 
+    advance("\n")
     expressions = []
     if token.value != "}":
         while True:
-            expressions.append(parse_expression())  # NEWLINE GETTING STUCK HERE
+            expression = parse_expression()
+            if token.value == "\n":
+                advance()
+            expressions.append(expression)  # NEWLINE GETTING STUCK HERE
             if token.value == "}":
-                break
-            elif token.value == "\n":
-                advance() 
-    self.second = expressions
-    advance("\n")
+                break 
     advance("}")
+    self.second = expressions
     return self
 
 
