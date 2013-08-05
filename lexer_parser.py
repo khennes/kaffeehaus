@@ -179,16 +179,22 @@ class Scope:
         self.ttype = ttype  # new variable
         self.parent = None
 
-    def define(self):
-        if 
-        ttype.reserved = False
-        ttype.nulld = itself  # what
-        ttype.leftd = null
-        ttype.leftbp = 0
-        ttype.scope = scope
+    def define(self, token):  # takes in token type "ID"
+        t = token.value  # store variable or function name as t
+        if token.ttype != "ID":
+            raise SyntaxError("Expected variable or function name.")
+        if t.reserved or t.defined:
+            raise SyntaxError("Token name already in use.")
+        t.reserved = False
+        t.nulld = lambda self: self
+        t.leftd = None
+        t.stmtd = None
+        t.leftbp = 0
+        t.scope = scope
     
-    def find(self, token_name):
-        while True:
+    def find(self, token):
+        # while True:
+        pass
     
     def pop(self):  # close scope, return focus to parent
         global scope
