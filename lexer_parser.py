@@ -167,6 +167,49 @@ def t_error(t):
     t.lexer.skip(1)
 
 
+### SCOPE ###
+"""
+class Rule(object):
+    def nulld(self, ....):
+        raise NotImplementedError
+"""
+
+class Scope:
+    def __init__(self, ttype):
+        self.ttype = ttype  # new variable
+        self.parent = None
+
+    def define(self):
+        if 
+        ttype.reserved = False
+        ttype.nulld = itself  # what
+        ttype.leftd = null
+        ttype.leftbp = 0
+        ttype.scope = scope
+    
+    def find(self, token_name):
+        while True:
+    
+    def pop(self):  # close scope, return focus to parent
+        global scope
+        s = scope
+        scope = s.parent
+        # return?
+
+    def reserve():
+        global token
+        t = token
+        if t.reserved or t.type in reserved.values():
+            return
+        
+
+def new_scope():
+    # if token.id == "ID" and token is not reserved keyword
+    global scope, token
+    s = scope
+    scope = Scope(token.value) 
+
+
 ### CALL LEXING & PARSING FUNCTIONS ###
 
 def generate_tokens(program):    
@@ -226,7 +269,7 @@ def parse(filename=None):
 def advance(value=None):
     global token
     if value:
-        if token.ttype == "ID": 
+        if token.ttype == "ID":
             if token.ttype != value:
                 raise SyntaxError("Expected %r" % value)
         elif token.value != value:
@@ -247,13 +290,14 @@ def parse_expression(rbp=0):
         print t
         if hasattr(t, "stmtd"):
             left = t.stmtd()
+            print "STATEMENT: ", left
         else:
             left = t.nulld()
             while rbp < token.leftbp:  # keep going till rbp > current token's bp
                 t = token
                 token = next()
                 left = t.leftd(left)
-                print "LEFT: ", left
+                print "EXPRESSION: ", left
     else:
         left = "(end)"
     print "LEFT: ", left
@@ -480,6 +524,12 @@ def nulld(self):
 """
 
 
+# For-statement loops
+@method(symbol("for"))
+def stmtd(self):
+    pass 
+
+# While-statement loops
 @method(symbol("while"))
 def stmtd(self):
     advance()
@@ -500,6 +550,7 @@ def stmtd(self):
     advance("}")
     
 
+# If/elsif/else conditional statements 
 @method(symbol("if"))
 def stmtd(self):
     condition = parse_expression()
@@ -527,7 +578,7 @@ def stmtd(self):
                     advance()
                 if token.value == "}":
                     break
-    advance("}")
+        advance("}")
     if token == "else":
         advance("{")
         if token == "\n":
@@ -539,40 +590,9 @@ def stmtd(self):
                     advance()
                 if token.value == "}":
                     break
-    advance("}")
+        advance("}")
     return self
-
-"""
-@method(symbol("elsif"))
-def stmtd(self):
-    condition = parse_expression()
-    self.first = condition
-    advance("{")
-    expressions = []
-    if token.value != "}":
-        while True:
-            expressions.append(parse_expression())
-            if token.value == "}":
-                break
-    self.second = expressions
-    advance("}")
-    return self
-
-@method(symbol("else"))
-def stmtd(self):
-    condition = parse_expression()
-    self.first = condition
-    advance("{")
-    expressions = []
-    if token.value != "}":
-        while True:
-            expressions.append(parse_expression())
-            if token.value == "}":
-                break
-    self.second = expressions
-    advance("}")
-    return self
-""" 
+ 
 
 # Function declarations with "def"
 @method(symbol("def"))
@@ -613,44 +633,4 @@ if __name__ == "__main__":
     main()
 
 
-"""
-### SCOPE ###
-class Rule(object):
-    def nulld(self, ....):
-        raise NotImplementedError
 
-class Scope:
-    def __init__(ttype):
-        self.ttype = ttype  # new variable
-        self.parent = None
-
-    def define(self):
-        if 
-        ttype.reserved = False
-        ttype.nulld = itself  # what
-        ttype.leftd = null
-        ttype.leftbp = 0
-        ttype.scope = scope
-    
-    def find(self, token_name):
-        while True:
-    
-    def pop(self):  # close scope, return focus to parent
-        global scope
-        s = scope
-        scope = s.parent
-        # return?
-
-    def reserve():
-        global token
-        t = token
-        if t.reserved or t.type in reserved.values():
-            return
-        
-
-def new_scope():
-    # if token.id == "ID" and token is not reserved keyword
-    global scope, token
-    s = scope
-    scope = Scope(token.value) 
-"""
