@@ -8,6 +8,7 @@ import re
 # Constants
 # TODO: SCOPE
 # TODO: Make token ttype/value consistent across program... when you have time
+# TODO: change generator to a list, since we know we'll be using all of it
 
 
 ### GLOBALS ###
@@ -172,9 +173,9 @@ def t_error(t):
 class Rule(object):
     def nulld(self, ....):
         raise NotImplementedError
-"""
 
 class Scope:
+    # can I declare 'global scope' here?
     def __init__(self, ttype):
         self.ttype = ttype  # new variable
         self.parent = None
@@ -193,28 +194,42 @@ class Scope:
         t.scope = scope
     
     def find(self, token):
-        # while True:
-        pass
+        global scope
+        s = scope
+        while True:
+            t = token
+            if token and 
+        
+        scope = s.parent
+        if not scope:
+            s = symbol_table[token]
+            if s:
+                return s
+            else:
+                return symbol_table["ID"]
+
     
     def pop(self):  # close scope, return focus to parent
         global scope
         s = scope
         scope = s.parent
-        # return?
 
-    def reserve():
+    def reserve(self, token):
         global token
         t = token
-        if t.reserved or t.type in reserved.values():
+        if t.reserved:
             return
-        
+        if t.ttype == "ID" or t.ttype in reserved.values():
+            raise SyntaxError("Already defined.")
+ 
+        t.reserved = true
 
 def new_scope():
     # if token.id == "ID" and token is not reserved keyword
     global scope, token
     s = scope
     scope = Scope(token.value) 
-
+"""
 
 ### CALL LEXING & PARSING FUNCTIONS ###
 
@@ -256,16 +271,16 @@ def parse(filename=None):
     expression_list = []
     if not filename:
         filename = raw_input("> ")
-    program = open(filename).read()  # change to readline for better error checking?
+    program = open(filename).read()
     token_stream = generate_tokens(program)
     next = tokenize(token_stream).next
     token = next()
 
     while token and eof == False:
         expression = parse_expression()  
+        expression_list.append(expression)
         if not token or eof == True:
             break
-        expression_list.append(expression)
     return expression_list
 
 
@@ -293,7 +308,6 @@ def parse_expression(rbp=0):
     t = token
     advance()
     if eof == False:
-        print t
         if hasattr(t, "stmtd"):
             left = t.stmtd()
             print "STATEMENT: ", left
@@ -379,6 +393,7 @@ symbol("\n").nulld = lambda self: self
 symbol("[", 150)
 symbol("(", 150)
 symbol(".", 150)
+symbol("$")
 
 """ how to handle??
 @method(symbol("\""))
