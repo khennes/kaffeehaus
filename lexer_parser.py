@@ -8,7 +8,6 @@ import re
 # Constants
 # TODO: SCOPE
 # TODO: Make token ttype/value consistent across program... when you have time
-# TODO: change generator to a list, since we know we'll be using all of it
 
 
 ### GLOBALS ###
@@ -281,16 +280,13 @@ def parse(filename=None):
     while len(token_stack) > 0:
         expression = parse_expression()  
         expression_list.append(expression)
-<<<<<<< HEAD
-        if not token or eof == True:
-            break
-    return expression_list
-=======
 
     if len(token_stack) == 0:
         print "ABSTRACT SYNTAX TREE:\n ", expression_list
         return expression_list  # this returns the AST
->>>>>>> list
+
+    else:  # test
+        print "WHY AREN'T YOU WORKING"
 
 
 ### ADVANCE ###
@@ -317,23 +313,9 @@ def parse_expression(rbp=0):
     global token
     t = token
     advance()
-<<<<<<< HEAD
-    if eof == False:
-        if hasattr(t, "stmtd"):
-            left = t.stmtd()
-            print "STATEMENT: ", left
-        else:
-            left = t.nulld()
-            while rbp < token.leftbp:  # keep going till rbp > current token's bp
-                t = token
-                token = next()
-                left = t.leftd(left)
-                print "EXPRESSION: ", left
-=======
     if hasattr(t, "stmtd"):
         left = t.stmtd()
         print "STATEMENT: ", left
->>>>>>> list
     else:
         left = t.nulld()
         while rbp < token.leftbp:  # keep going till rbp > current token's bp
@@ -413,11 +395,7 @@ symbol("\n").nulld = lambda self: self
 symbol("[", 150)
 symbol("(", 150)
 symbol(".", 150)
-<<<<<<< HEAD
-symbol("$")
-=======
 symbol("$")  # treat similar to variable? should bind tightly to right
->>>>>>> list
 
 """ how to handle??
 @method(symbol("\""))
