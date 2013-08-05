@@ -13,10 +13,9 @@ import re
 
 ### GLOBALS ###
 token = None        # contains current token object
-next                # holds next token obj in token_stream
 symbol_table = {}   # store instantiated symbol classes
 scope = None        # contains current scope object
-eof = False         # bool to indicate whether EOF has been reached
+token_stack = []
 
 
 ### LEXER ###
@@ -247,7 +246,7 @@ def generate_tokens(program):
 
 
 def tokenize(token_stream):
-    global symbol_table
+    global symbol_table, token_stack
     
     # ugly hack to remove leading, trailing newlines
     while token_stream[0].type == "NEWLINE":  
@@ -261,44 +260,55 @@ def tokenize(token_stream):
         else:
             symbol = symbol_table[token.value]
         s = symbol(token.type, token.value, token.lineno, token.lexpos)
+        token_stack.append(s)
         if not symbol:
             raise SyntaxError("Unknown operator (%r)" % token.type)
-        yield s
+    return token_stack  # return a discrete list of symbol tokens
+                        # rather than a generator
+                        # do I need to return this if it's a global?
 
 
 def parse(filename=None):
-    global token, next 
+    global token, token_stack 
     expression_list = []
     if not filename:
         filename = raw_input("> ")
     program = open(filename).read()
     token_stream = generate_tokens(program)
-    next = tokenize(token_stream).next
-    token = next()
+    token_stack = tokenize(token_stream)
+    token = token_stack.pop(0)
 
-    while token and eof == False:
+    while len(token_stack) > 0:
         expression = parse_expression()  
         expression_list.append(expression)
+<<<<<<< HEAD
         if not token or eof == True:
             break
     return expression_list
+=======
+
+    if len(token_stack) == 0:
+        print "ABSTRACT SYNTAX TREE:\n ", expression_list
+        return expression_list  # this returns the AST
+>>>>>>> list
 
 
 ### ADVANCE ###
 # Check for errors before fetching next token
 
 def advance(value=None):
-    global token
+    global token, token_stack
     if value:
         if token.ttype == "ID":
             if token.ttype != value:
                 raise SyntaxError("Expected %r" % value)
         elif token.value != value:
             raise SyntaxError("Expected %r" % value)
-    try:
-        token = next()
-    except StopIteration:
-        eof = True 
+    if len(token_stack) > 0:
+        next_token = token_stack.pop(0)
+        token = next_token
+    else:
+        return
 
 
 ### EXPRESSION PARSER ###
@@ -307,6 +317,7 @@ def parse_expression(rbp=0):
     global token
     t = token
     advance()
+<<<<<<< HEAD
     if eof == False:
         if hasattr(t, "stmtd"):
             left = t.stmtd()
@@ -318,9 +329,18 @@ def parse_expression(rbp=0):
                 token = next()
                 left = t.leftd(left)
                 print "EXPRESSION: ", left
+=======
+    if hasattr(t, "stmtd"):
+        left = t.stmtd()
+        print "STATEMENT: ", left
+>>>>>>> list
     else:
-        left = "(end)"
-    print "LEFT: ", left
+        left = t.nulld()
+        while rbp < token.leftbp:  # keep going till rbp > current token's bp
+            t = token
+            advance()
+            left = t.leftd(left)
+            print "EXPRESSION: ", left
     return left
 
 
@@ -393,7 +413,11 @@ symbol("\n").nulld = lambda self: self
 symbol("[", 150)
 symbol("(", 150)
 symbol(".", 150)
+<<<<<<< HEAD
 symbol("$")
+=======
+symbol("$")  # treat similar to variable? should bind tightly to right
+>>>>>>> list
 
 """ how to handle??
 @method(symbol("\""))
