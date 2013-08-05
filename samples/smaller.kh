@@ -1,0 +1,3 @@
+def mod() {
+    return 10 % 2
+}

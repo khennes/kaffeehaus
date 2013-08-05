@@ -15,6 +15,7 @@ token = None        # contains current token object
 next                # holds next token obj in token_stream
 symbol_table = {}   # store instantiated symbol classes
 scope = None        # contains current scope object
+eof = False         # bool to indicate whether EOF has been reached
 
 
 ### LEXER ###
@@ -75,7 +76,7 @@ reserved = { 'if' : 'IF',
     'int' : 'INT',
     'float' : 'FLOAT',
     'struct' : 'STRUCT',
-    'char' : 'CHAR', 
+    'char*' : 'CHAR', 
     'string' : 'STRING',
     'array' : 'ARRAY',
     'break' : 'BREAK',
@@ -211,9 +212,9 @@ def parse(filename=None):
     next = tokenize(token_stream).next
     token = next()
 
-    while token: 
+    while token and eof == False:
         expression = parse_expression()  
-        if not token:
+        if not token or eof == True:
             break
         expression_list.append(expression)
     return expression_list
@@ -233,7 +234,7 @@ def advance(value=None):
     try:
         token = next()
     except StopIteration:
-        pass
+        eof = True 
 
 
 ### EXPRESSION PARSER ###
@@ -242,17 +243,21 @@ def parse_expression(rbp=0):
     global token
     t = token
     advance()
-    if hasattr(t, "stmtd"):
-        left = t.stmtd()
-        return left
+    if eof == False:
+        print t
+        if hasattr(t, "stmtd"):
+            left = t.stmtd()
+        else:
+            left = t.nulld()
+            while rbp < token.leftbp:  # keep going till rbp > current token's bp
+                t = token
+                token = next()
+                left = t.leftd(left)
+                print "LEFT: ", left
     else:
-        left = t.nulld()
-        while rbp < token.leftbp:  # keep going till rbp > current token's bp
-            t = token
-            token = next()
-            left = t.leftd(left)
-            print "LEFT: ", left
-            return left
+        left = "(end)"
+    print "LEFT: ", left
+    return left
 
 
 ### STATEMENT PARSER ###
@@ -320,11 +325,19 @@ symbol(")")
 symbol(",")
 symbol("]")
 symbol("}")
-symbol("\n")
+symbol("\n").nulld = lambda self: self
 symbol("[", 150)
 symbol("(", 150)
 symbol(".", 150)
 
+""" how to handle??
+@method(symbol("\""))
+def nulld(self):
+    advance("\"")
+    advance("ID")
+    advance("\"")
+    return self
+"""
 
 ### BASIC PREFIX OPERATORS ###
 
@@ -366,7 +379,8 @@ infix("%", 120)
 symbol("int").nulld = lambda self: self
 symbol("bool").nulld = lambda self: self
 symbol("float").nulld = lambda self: self
-symbol("char").nulld = lambda self: self
+symbol("char*").nulld = lambda self: self
+
 
 
 ### INFIX_R & ASSIGNMENT OPERATORS ###
@@ -454,6 +468,16 @@ statement("for", 20)
 statement("print", 20)
 statement("elsif", 20)
 statement("else", 20)
+
+"""
+@method(symbol("\""))
+def nulld(self):
+    self.first = None
+    advance("ID")
+    advance("\"")
+    self.second = None
+    return self
+"""
 
 
 @method(symbol("while"))
