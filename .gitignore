@@ -1,7 +1,7 @@
 ply-3.4
 *.swp
 README.md
-style.kh
+*.kh
 *.pyc
 BNF-grammar.txt
 web
@@ -9,6 +9,3 @@ crumpet
 guess.py
 notes.txt
 outline.txt
-small.kh
-style.kh
-test.kh
