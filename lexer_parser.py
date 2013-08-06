@@ -13,12 +13,11 @@ import re
 ### GLOBALS ###
 token = None        # contains current token object
 symbol_table = {}   # store instantiated symbol classes
-# scope = None        # contains current scope object
-token_stack = []
+scope = None        # contains current scope object
+token_stack = []    # contains remaining tokens
 
 
 ### LEXER ###
-# outputs LexToken(self.type, self.value, self.lineno, self.lexpos)
 
 tokens_list = (
     'NUMBER',
@@ -109,7 +108,7 @@ t_INCREMENT = r'\+\+'
 t_DECREMENT = r'--'
 t_EQUALS    = r'='
 t_PLUSEQ    = r'\+='
-t_MINUSEQ     = r'\-='
+t_MINUSEQ   = r'\-='
 t_ISEQ	    = r'=='
 t_ISNOTEQ   = r'!='
 t_GREATER   = r'>'
@@ -177,6 +176,75 @@ def t_error(t):
     t.lexer.skip(1)
 
 
+### SCOPE ###
+
+class Scope:
+    def __init__(self, token):
+        self.token = token
+        self.parent = None
+        self.defined = defined = {}  # inventing this to hold defined variables for current scope
+
+    # Define variable on initialization - rename def initialize() ?
+    def define(self, token):
+        tvalue = token.value  # store variable/function name as tvalue
+
+        # Error checking
+        if token.ttype != "ID":
+            raise SyntaxError("Expected variable or function name.")
+        elif token.reserved:
+            raise SyntaxError("Variable name is already reserved.")
+        elif tvalue in defined.keys():
+            raise SyntaxError("Variable name already defined.")
+
+        # If valid variable name add to 'defined' dictionary, set value to True
+        else:
+            defined[tvalue] = True
+
+        # What are these doing?? Isn't this repeating code?
+        token.reserved = False
+        # token.nulld = lambda self: self
+        # token.leftd = None
+        # token.stmtd = None
+        token.leftbp = 0  # why 0? greater, to bind to data types?
+        token.scope = scope
+        return token
+
+    def find(self, token):
+        global scope
+        s = scope
+        while True:
+            t = token
+
+        scope = s.parent
+        if not scope:
+            s = symbol_table[token]
+            if s:
+                return s
+            else:
+                return symbol_table["ID"]
+
+    # Close current scope, return focus to parent scope
+    def pop(self):
+        global scope
+        s = scope
+        scope = s.parent
+
+    # Reserve variable name in current scope
+    def reserve(self, token):
+        if token.ttype != "ID" or token.reserved:
+            return
+        token.reserved = True
+
+
+def new_scope(token):
+    global scope
+    s = scope
+    scope = Scope(token)
+    scope.def = {}
+    scope.parent = s
+    return scope
+
+
 ### CALL LEXING & PARSING FUNCTIONS ###
 
 def generate_tokens(program):    
@@ -212,7 +280,6 @@ def tokenize(token_stream):
             raise SyntaxError("Unknown operator (%r)" % token.type)
     return token_stack  # return a discrete list of symbol tokens
                         # rather than a generator
-                        # do I need to return this if it's a global?
 
 
 def parse(filename=None):
@@ -233,13 +300,10 @@ def parse(filename=None):
         print "ABSTRACT SYNTAX TREE:\n ", expression_list
         return expression_list  # this returns the AST
 
-    else:  # test
-        print "WHY AREN'T YOU WORKING"
-
 
 ### ADVANCE ###
-# Check for errors before fetching next token
 
+# Check for errors before fetching next token
 def advance(value=None):
     global token, token_stack
     if value:
@@ -248,9 +312,14 @@ def advance(value=None):
                 raise SyntaxError("Expected %r" % value)
         elif token.value != value:
             raise SyntaxError("Expected %r" % value)
+    
     if len(token_stack) > 0:
         next_token = token_stack.pop(0)
         token = next_token
+
+        # if next token is an ID, trace back through scope chain to find prev. def?
+        # if token.ttype == "ID":
+        #    o = scope.find(token.value)  # what do I do with o here?
     else:
         return
 
@@ -359,6 +428,7 @@ symbol("char*").nulld = lambda self: self
 # Helper method for nulld method: THERE IS NO LEFT
 def prefix(ttype, bp):
     def nulld(self):                        # attach nodes to nulld method
+        scope.reserve(token)                 # pass in token?
         self.first = parse_expression(bp)   # bp = rbp
         self.second = None
         return self
@@ -473,6 +543,7 @@ def nulld(self):
 # Helper method to handle statements
 def statement(ttype, bp):
     def stmtd(self):
+        scope.reserve(token)
         self.first = parse_expression() 
         self.second = None
         return self
@@ -537,6 +608,8 @@ def stmtd(self):
                     break
         advance("}")
     if token == "else":
+        print "ELSE: ", token
+        # scope.reserve(token)
         advance("{")
         if token == "\n":
             advance()
@@ -580,6 +653,7 @@ def stmtd(self):
                 break 
     self.second = expressions
     advance("}")
+    scope.pop()
     return self
 
 
