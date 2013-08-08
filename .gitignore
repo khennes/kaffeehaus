@@ -1,4 +1,5 @@
 ply-3.4
+emscripten
 *.swp
 README.md
 *.kh
