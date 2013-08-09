@@ -180,40 +180,42 @@ def t_error(t):
 
 ### SCOPE ###
 
+""" When a new variable x is declared with var, use scope find(x) to see if 
+there is a matching symbol in symbol_table. If so, throw an error (name already
+reserved). If not, set reserved = true and add the new symbol to the symbol
+table. Set the value equal to the variable's assigned value? """
+
 class Scope:
     def __init__(self, token):
         self.token = token
         self.parent = None
-        self.defined = defined = {}  # hold variables defined in current scope 
+        self.defined = {}  # hold variables defined in current scope 
+
+    def define(self, token):
+        if token.value not in defined.keys():
+            self.defined[token.value] = True  # Add variable to scope dictionary
+            print "DEFINED NEW VARIABLE"
+        elif token.value in reserved.keys():
+            raise NameError("Invalid variable name (reserved keyword).")
+        else:
+            raise NameError("Invalid variable name.")
 
     def find(self, token):
-        if name not in defined.keys():
-            raise SyntaxError(".")
-        scope = s.parent
-        if not scope:
-            s = symbol_table[token]
-            if s:
-                return s
-            else:
-                return symbol_table["ID"]
-
-    # Mark new variable as reserved 
-    def reserve(self, token):
-        name = token.value
-        if token.ttype != "ID" or name.reserved or name not in defined.keys():
-            raise SyntaxError("Invalid variable name.")
+        global symbol_table
+        if token.value not in self.defined.keys():
+            raise NameError("Variable %r not defined." % token.value)
         else:
-            name.reserved = True
-    
+            return
+
     # Close current scope, return focus to parent (global) scope
     def pop(self):
-        global scope
         s = scope
         scope = s.parent
 
 ### END SCOPE CLASS ###
 
 
+# Instantiate new scope inside of functions only?
 def new_scope():
     global token, scope
     s = scope
@@ -296,10 +298,10 @@ def advance(value=None):
     
     if len(token_stack) > 0:
         next_token = token_stack.pop(0)
-        # if next_token.ttype == "ID":
-        #    if not scope.find(next_token.value):
-        #        raise SyntaxError("Undefined variable %r" % next_token.value)
+        if next_token.ttype == "ID":
+            next_token = scope.find(next_token)  # check if prev. declared
         token = next_token
+        print "NEXT TOKEN: ", token
     else:
         return
 
@@ -309,6 +311,7 @@ def advance(value=None):
 def parse_expression(rbp=0):
     global token
     t = token
+    print "T ", t
     advance()
     if hasattr(t, "stmtd"):
         left = t.stmtd()
@@ -396,11 +399,11 @@ symbol("}")
 symbol("\n").nulld = lambda self: self
 symbol("[", 150)
 symbol("(", 150)
-symbol("$", 10)  # treat similar to variable? should bind tightly to right
-symbol("int").nulld = lambda self: self
-symbol("bool").nulld = lambda self: self
-symbol("float").nulld = lambda self: self
-symbol("char*").nulld = lambda self: self
+# symbol("$", 10)  # treat similar to variable? should bind tightly to right
+symbol("int", 0).nulld = lambda self: self
+symbol("bool", 0).nulld = lambda self: self
+symbol("float", 0).nulld = lambda self: self
+symbol("char*", 0).nulld = lambda self: self
 
 
 ### BASIC PREFIX OPERATORS ###
@@ -467,6 +470,7 @@ infix_r("**", 140)
 
 
 # Function decorator to avoid repeating code
+# FIND OUT WHAT THIS DOES
 def method(NewSymbol):
     assert issubclass(NewSymbol, BaseSymbol)
     def bind(fn):
@@ -531,6 +535,7 @@ def statement(ttype, bp):
     symbol(ttype).stmtd = stmtd
 
 statement("break", 0)
+statement("get", 0)
 statement("continue", 0)
 statement("return", 20)
 statement("for", 20)
@@ -543,14 +548,13 @@ statement("else", 20)
 def stmtd(self):
     if token.ttype != "ID":
         raise SyntaxError("Expected a new variable name.")
-    scope.reserve(token.value)  # Add to scope dictionary as declared variable
-    t = token  # store current token for use below
+    scope.define(token)  # Add to scope dictionary as declared variable
+    print "DEFINED!"
+    self.first = parse_expression()
     advance()
     if token.value == "=":
         advance()
-        self.first = t
         self.second = parse_expression()
-    scope.defined[t] = self.second  # update any time a variable assignment happens 
     if token.value == "\n":
         advance()
     return self        
@@ -596,7 +600,7 @@ def stmtd(self):
     advance(")")
     self.first = conditions
     advance("{")  # should { always signal new scope? where to code that?
-    scope.define(token) 
+    # scope.define(token) 
     if token.value != "}":
         while True:
             self.second.append(parse_expression())
