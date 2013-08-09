@@ -229,7 +229,7 @@ def parse(filename=None):
 
     if len(token_stack) == 0:
         print "ABSTRACT SYNTAX TREE:\n ", expression_list
-        return expression_list  # this returns the AST
+        return expression_list
 
 
 # def parse_program(
@@ -243,9 +243,9 @@ def advance(value=None):
     if value:
         if token.ttype == "ID" or token.ttype == "STRING":
             if token.ttype != value:
-                raise SyntaxError("Expected %r" % value)
+                raise SyntaxError("Expected %r, not %r" % (value, token.value))
         elif token.value != value:
-            raise SyntaxError("Expected %r" % value)
+            raise SyntaxError("Expected %r, not %r" % (value, token.value))
     
     if len(token_stack) > 0:
         next_token = token_stack.pop(0)
@@ -259,7 +259,6 @@ def advance(value=None):
 def parse_expression(rbp=0):
     global token
     t = token
-    print "T ", t
     advance()
     if hasattr(t, "stmtd"):
         left = t.stmtd()
@@ -348,10 +347,11 @@ symbol("\n").nulld = lambda self: self
 symbol("[", 150)
 symbol("(", 150)
 # symbol("$", 10)  # treat similar to variable? should bind tightly to right
-symbol("int", 0).nulld = lambda self: self
-symbol("bool", 0).nulld = lambda self: self
-symbol("float", 0).nulld = lambda self: self
-symbol("char*", 0).nulld = lambda self: self
+symbol("int").nulld = lambda self: self
+symbol("bool").nulld = lambda self: self
+symbol("float").nulld = lambda self: self
+symbol("char*").nulld = lambda self: self
+
 
 
 ### BASIC PREFIX OPERATORS ###
@@ -478,6 +478,7 @@ def statement(ttype, bp):
         self.first = parse_expression() 
         self.second = None
         return self
+    # def eval
     symbol(ttype).stmtd = stmtd
 
 statement("break", 0)
@@ -492,13 +493,16 @@ statement("else", 20)
 # Variable declaration
 @method(symbol("var"))
 def stmtd(self):
-    if token.ttype != "ID":
-        raise SyntaxError("Expected a new variable name.")
-    self.first = parse_expression()
+    self.first = token.value
+    advance("ID")
+    self.second = token.value 
+    if not token.ttype in [ 'ID', 'INT', 'FLOAT', 'CHAR', 'BOOL', 'STRUCT', 'ARRAY' ]:
+        raise SyntaxError("Expected variable type.")
     advance()
     if token.value == "=":
         advance()
-        self.second = parse_expression()
+        self.third = parse_expression()
+    advance()
     if token.value == "\n":
         advance()
     return self        
@@ -603,9 +607,7 @@ def stmtd(self):
 # Function declarations with "def"
 @method(symbol("def"))
 def stmtd(self):
-    print "FUNCTION DEF TOKEN: ", token
-    if token.ttype != "ID":
-        raise SyntaxError("Expected function name.")
+    advance("ID")
     arguments = []
     advance("(")
     if token.value != ")":
@@ -635,7 +637,8 @@ def stmtd(self):
 
 
 def main():
-    parse()
+    filename = sys.argv[1] if len(sys.argv) > 1 else None
+    parse(filename)
 
 if __name__ == "__main__":
     main()
