@@ -264,7 +264,6 @@ def parse_expression(rbp=0):
         left = t.stmtd()
         print "STATEMENT: ", left
     elif hasattr(t, "nulld"):
-        print "NOW I'M PARSING ", token.value
         left = t.nulld()
         while rbp < token.leftbp:  # keep going till rbp > current token's bp
             t = token
@@ -577,52 +576,73 @@ def stmtd(self):
     self.first = parse_expression()  # condition
     advance(")")
     advance("{")
-    if token == "\n":
+    if token.value == "\n":
         advance()
+    
+    # list of expressions to execute if condition is True
     expressions = []
     if token.value != "}":
         while True:
             expressions.append(parse_expression())
-            if token == "\n":
+            if token.value == "\n":
                 advance()
             if token.value == "}":
                 break
     self.second = expressions
     advance("}")
+
+    # check for optional ternary operator
     if token.value == "elsif":
         self.third = parse_expression()
-        advance()
-        thirdnode = []
-        advance("(")
-        thirdnode.append(parse_expression())  # condition
-        advance(")")
-        advance("{")
-        expressions = []
-        if token.value != "}":
-            while True:
-                expressions.append(parse_expression())
-                if token == "\n":
-                    advance()
-                if token.value == "}":
-                    break
-        self.third = 
-        advance("}")
-    if token.value == "else":
-        print "ELSE: ", token
-        advance()
-        advance("{")
-        if token == "\n":
-            advance()
-        if token.value != "}":
-            while True:
-                expressions.append(parse_expression())
-                if token == "\n":
-                    advance()
-                if token.value == "}":
-                    break
-        advance("}")
+    elif token.value == "else":
+        self.third = parse_expression()
     return self
- 
+
+
+@method(symbol("elsif"))
+def stmtd(self):
+    advance("(")
+    self.first = parse_expression()  # condition
+    advance(")")
+    advance("{")
+    if token.value == "\n":
+        advance()
+
+    # list of expressions to execute if condition is True
+    expressions = []
+    if token.value != "}":
+        while True:
+            expressions.append(parse_expression())
+            if token.value == "\n":
+                advance()
+            if token.value == "}":
+                break
+    self.second = expressions
+    advance("}")
+
+    # check for optional ternary operator
+    if token.value == "else":
+        self.third = parse_expression()
+    return self
+
+
+@method(symbol("else"))
+def stmtd(self):
+    advance("{")
+    if token.value == "\n":
+        advance()
+    expressions = []
+    if token.value != "}":
+        while True:
+            expressions.append(parse_expression())
+            if token.value == "\n":
+                advance()
+            if token.value == "}":
+                break
+    advance("}")
+    self.first = expressions
+    return self
+
 
 # Function declarations with "def"
 @method(symbol("def"))
