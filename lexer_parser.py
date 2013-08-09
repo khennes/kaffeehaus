@@ -14,7 +14,6 @@ import re
 ### GLOBALS ###
 token = None        # contains current token object
 symbol_table = {}   # store instantiated symbol classes
-scope = None        # contains current scope object
 token_stack = []    # contains remaining tokens
 
 
@@ -178,53 +177,6 @@ def t_error(t):
     t.lexer.skip(1)
 
 
-### SCOPE ###
-
-""" When a new variable x is declared with var, use scope find(x) to see if 
-there is a matching symbol in symbol_table. If so, throw an error (name already
-reserved). If not, set reserved = true and add the new symbol to the symbol
-table. Set the value equal to the variable's assigned value? """
-
-class Scope:
-    def __init__(self, token):
-        self.token = token
-        self.parent = None
-        self.defined = {}  # hold variables defined in current scope 
-
-    def define(self, token):
-        if token.value not in defined.keys():
-            self.defined[token.value] = True  # Add variable to scope dictionary
-            print "DEFINED NEW VARIABLE"
-        elif token.value in reserved.keys():
-            raise NameError("Invalid variable name (reserved keyword).")
-        else:
-            raise NameError("Invalid variable name.")
-
-    def find(self, token):
-        global symbol_table
-        if token.value not in self.defined.keys():
-            raise NameError("Variable %r not defined." % token.value)
-        else:
-            return
-
-    # Close current scope, return focus to parent (global) scope
-    def pop(self):
-        s = scope
-        scope = s.parent
-
-### END SCOPE CLASS ###
-
-
-# Instantiate new scope inside of functions only?
-def new_scope():
-    global token, scope
-    s = scope
-    scope = Scope(token)
-    scope.defined = {}
-    scope.parent = s
-    return scope
-
-
 ### CALL LEXING & PARSING FUNCTIONS ###
 
 def generate_tokens(program):    
@@ -270,7 +222,6 @@ def parse(filename=None):
     token_stream = generate_tokens(program)
     token_stack = tokenize(token_stream)
     token = token_stack.pop(0)
-    new_scope()  # create base (global) scope
 
     while len(token_stack) > 0:
         expression = parse_expression()  
@@ -288,7 +239,7 @@ def parse(filename=None):
 
 # Check for errors before fetching next token
 def advance(value=None):
-    global token, token_stack, scope
+    global token, token_stack
     if value:
         if token.ttype == "ID" or token.ttype == "STRING":
             if token.ttype != value:
@@ -298,10 +249,7 @@ def advance(value=None):
     
     if len(token_stack) > 0:
         next_token = token_stack.pop(0)
-        if next_token.ttype == "ID":
-            next_token = scope.find(next_token)  # check if prev. declared
         token = next_token
-        print "NEXT TOKEN: ", token
     else:
         return
 
@@ -411,7 +359,6 @@ symbol("char*", 0).nulld = lambda self: self
 # Helper method for nulld method: THERE IS NO LEFT
 def prefix(ttype, bp):
     def nulld(self):                        # attach nodes to nulld method
-        scope.reserve(token)                 # pass in token?
         self.first = parse_expression(bp)   # bp = rbp
         self.second = None
         return self
@@ -528,7 +475,6 @@ def nulld(self):
 # Helper method to handle statements
 def statement(ttype, bp):
     def stmtd(self):
-        scope.reserve(token)
         self.first = parse_expression() 
         self.second = None
         return self
@@ -548,8 +494,6 @@ statement("else", 20)
 def stmtd(self):
     if token.ttype != "ID":
         raise SyntaxError("Expected a new variable name.")
-    scope.define(token)  # Add to scope dictionary as declared variable
-    print "DEFINED!"
     self.first = parse_expression()
     advance()
     if token.value == "=":
@@ -572,7 +516,6 @@ def stmtd(self):
     expressions = []
     if token.value != "}":
         while True:
-            new_scope()
             expressions.append(parse_expression())
             if token.value == "\n":
                 advance()
@@ -586,10 +529,8 @@ def stmtd(self):
 # For-loop statements
 @method(symbol("for"))
 def stmtd(self):
-    new_scope()
     conditions = []
     advance("(")
-    scope.define(token)
     if token.value != ")":
         while True:
             conditions.append(parse_expression())
@@ -599,8 +540,7 @@ def stmtd(self):
                 break
     advance(")")
     self.first = conditions
-    advance("{")  # should { always signal new scope? where to code that?
-    # scope.define(token) 
+    advance("{")
     if token.value != "}":
         while True:
             self.second.append(parse_expression())
@@ -611,7 +551,6 @@ def stmtd(self):
     if token.value == "\n":
         advance()
     advance("}")
-    scope.pop()
     return self
 
             
@@ -647,7 +586,6 @@ def stmtd(self):
         advance("}")
     if token == "else":
         print "ELSE: ", token
-        # scope.reserve(token)
         advance("{")
         if token == "\n":
             advance()
@@ -665,18 +603,15 @@ def stmtd(self):
 # Function declarations with "def"
 @method(symbol("def"))
 def stmtd(self):
-    new_scope()
     print "FUNCTION DEF TOKEN: ", token
     if token.ttype != "ID":
         raise SyntaxError("Expected function name.")
-    scope.define(token)
     arguments = []
     advance("(")
     if token.value != ")":
         while True:
             if token.value == ")":
                 break
-            scope.define(token)
             arguments.append(parse_expression())
             if token.value != ",":
                 break
@@ -696,7 +631,6 @@ def stmtd(self):
                 break 
     self.second = expressions
     advance("}")
-    scope.pop()
     return self
 
 
