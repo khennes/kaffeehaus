@@ -241,7 +241,7 @@ def parse(filename=None):
 def advance(value=None):
     global token, token_stack
     if value:
-        if token.ttype == "ID" or token.ttype == "STRING":
+        if token.ttype in [ 'ID', 'STRING', 'NUMBER' ]:
             if token.ttype != value:
                 raise SyntaxError("Expected %r, not %r" % (value, token.value))
         elif token.value != value:
@@ -264,6 +264,7 @@ def parse_expression(rbp=0):
         left = t.stmtd()
         print "STATEMENT: ", left
     elif hasattr(t, "nulld"):
+        print "NOW I'M PARSING ", token.value
         left = t.nulld()
         while rbp < token.leftbp:  # keep going till rbp > current token's bp
             t = token
@@ -343,6 +344,7 @@ symbol(")")
 symbol(",")
 symbol("]")
 symbol("}")
+symbol(";")
 symbol("\n").nulld = lambda self: self
 symbol("[", 150)
 symbol("(", 150)
@@ -485,7 +487,7 @@ statement("break", 0)
 statement("get", 0)
 statement("continue", 0)
 statement("return", 20)
-statement("for", 20)
+# statement("for", 20)
 statement("print", 20)
 statement("elsif", 20)
 statement("else", 20)
@@ -493,18 +495,26 @@ statement("else", 20)
 # Variable declaration
 @method(symbol("var"))
 def stmtd(self):
-    self.first = token.value
+    self.first = token.value  # variable name
     advance("ID")
-    self.second = token.value 
-    if not token.ttype in [ 'ID', 'INT', 'FLOAT', 'CHAR', 'BOOL', 'STRUCT', 'ARRAY' ]:
+    if not token.ttype in [ 'ID', 'INT', 'FLOAT', 'CHAR', 'BOOL', 'STRUCT', 'LBRACK' ]:
         raise SyntaxError("Expected variable type.")
+    if token.value == "[":  # check if array
+        advance()
+        type = []
+        type.append(token.value)  # array size
+        advance("NUMBER")
+        advance("]")
+        type.append(token.value)  # array type
+        print type
+        self.second = type
+    else:
+        self.second = token.value  # variable type
     advance()
     if token.value == "=":
-        advance()
+        advance("=")
         self.third = parse_expression()
     advance()
-    if token.value == "\n":
-        advance()
     return self        
 
 
@@ -545,13 +555,15 @@ def stmtd(self):
     advance(")")
     self.first = conditions
     advance("{")
+    expressions = []
     if token.value != "}":
         while True:
-            self.second.append(parse_expression())
+            expressions.append(parse_expression())
             if token.value == "\n":
                 advance()
             if token.value == "}":
                 break
+    self.second = expressions
     if token.value == "\n":
         advance()
     advance("}")
@@ -577,7 +589,13 @@ def stmtd(self):
                 break
     self.second = expressions
     advance("}")
-    if token == "elsif":
+    if token.value == "elsif":
+        self.third = parse_expression()
+        advance()
+        thirdnode = []
+        advance("(")
+        thirdnode.append(parse_expression())  # condition
+        advance(")")
         advance("{")
         expressions = []
         if token.value != "}":
@@ -587,9 +605,11 @@ def stmtd(self):
                     advance()
                 if token.value == "}":
                     break
+        self.third = 
         advance("}")
-    if token == "else":
+    if token.value == "else":
         print "ELSE: ", token
+        advance()
         advance("{")
         if token == "\n":
             advance()
