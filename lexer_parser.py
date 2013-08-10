@@ -3,11 +3,9 @@ import ply.lex as lex
 import re
 
 """ QUESTIONS, TODO """
-# Also need !, . 
+# TODO: Implement structs and dot notation
 # Why no tuples? (explain: tuples vs. lists?)
-# TODO: Implement lexical scoping
-# TODO: Constants, global vars, array declaration, error-checking for type declarations
-# TODO: Structs? (Worth it?)
+# TODO: Constants, global variable $ notation
 # TODO: Make token ttype/value consistent across program... when you have time
 
 
@@ -21,7 +19,6 @@ token_stack = []    # contains remaining tokens
 
 tokens_list = (
     'NUMBER',
-    'GLOBAL',
     'INCLUDE',
     'COMMENT',
     'ID',
@@ -71,6 +68,7 @@ reserved = { 'if' : 'IF',
     'while' : 'WHILE',
     'for' : 'FOR',
     'def' : 'DEF',
+    'typedef' : 'TYPEDEF',
     'var' : 'VAR',
     'bool' : 'BOOL',
     'true' : 'TRUE',
@@ -92,7 +90,7 @@ tokens = [ 'NUMBER', 'PLUS', 'MINUS', 'TIMES', 'DIVIDE', 'POWER', 'MODULO',
             'DOT', 'INCREMENT', 'DECREMENT', 'EQUALS', 'PLUSEQ', 'MINUSEQ',
             'ISEQ', 'ISNOTEQ', 'GREATER', 'LESS', 'LESSEQ', 'GREATEQ',
             'BOOLAND', 'BOOLOR', 'NEWLINE', 'COMMA', 'LBRACK', 'RBRACK',
-            'LBRACE', 'RBRACE', 'LPAREN', 'RPAREN', 'GLOBAL', 'DEFCONST',
+            'LBRACE', 'RBRACE', 'LPAREN', 'RPAREN', 'DEFCONST',
             'INCLUDE', 'COMMENT', 'ID', 'STRING', 'HASH', 'STCOMM', 'ENDCOMM'
             ] + list(reserved.values())
 
@@ -125,7 +123,6 @@ t_LBRACE    = r'{'
 t_RBRACE    = r'}'
 t_LPAREN    = r'\('
 t_RPAREN    = r'\)'
-t_GLOBAL    = r'\$'  # prefix for global variables
 t_HASH      = r'\#'  # can mean include, define (constant), or inline comment
 t_STCOMM    = r'\/\*'  
 t_ENDCOMM   = r'\*\/'
@@ -168,6 +165,7 @@ def t_STRING(t):
 # Check identifiers/names against reserved keywords
 def t_ID(t):
     r'[a-zA-Z_][a-zA-Z_0-9]*'
+    r'$[a-zA-Z_][a-zA-Z_0-9]*'
     t.type = reserved.get(t.value, 'ID')  # default to 'ID' if not a keyword
     return t
 
@@ -232,7 +230,7 @@ def parse(filename=None):
         return expression_list
 
 
-# def parse_program(
+# ADD PARSE_PROGRAM FN HERE 
     
 
 ### ADVANCE ###
@@ -260,6 +258,7 @@ def parse_expression(rbp=0):
     global token
     t = token
     advance()
+    print len(token_stack)
     if hasattr(t, "stmtd"):
         left = t.stmtd()
         print "STATEMENT: ", left
@@ -307,7 +306,7 @@ class BaseSymbol:
 
     """ outputs Py string representation of parse tree """
     def __repr__(self):
-        if self.ttype == "ID" or self.ttype == "ID" or self.ttype == "NUMBER":
+        if self.ttype in [ 'ID', 'STRING', 'NUMBER' ]:
             return "(%s %s)" % (self.ttype, self.value)
         out = [self.value, self.first, self.second, self.third]
         out = map(str, filter(None, out))
@@ -322,8 +321,8 @@ class BaseSymbol:
 def symbol(ttype, bp=0):
     try:
         NewSymbol = symbol_table[ttype]
-    except KeyError:            # if key missing, create new key/class
-        class NewSymbol(BaseSymbol):  # inherit from BaseSymbol class
+    except KeyError:                    # if key missing, create new key/class
+        class NewSymbol(BaseSymbol):    # inherit from BaseSymbol class
             pass                
         NewSymbol.__name__ = "symbol-" + ttype  # for debugging
         NewSymbol.ttype = ttype
@@ -339,6 +338,11 @@ symbol("NUMBER").nulld = lambda self: self
 symbol("STRING").nulld = lambda self: self
 symbol("true").nulld = lambda self: self
 symbol("false").nulld = lambda self: self
+symbol("int").nulld = lambda self: self
+symbol("bool").nulld = lambda self: self
+symbol("float").nulld = lambda self: self
+symbol("char*").nulld = lambda self: self
+symbol("struct").nulld = lambda self: self
 symbol(")")
 symbol(",")
 symbol("]")
@@ -347,12 +351,7 @@ symbol(";")
 symbol("\n").nulld = lambda self: self
 symbol("[", 150)
 symbol("(", 150)
-# symbol("$", 10)  # treat similar to variable? should bind tightly to right
-symbol("int").nulld = lambda self: self
-symbol("bool").nulld = lambda self: self
-symbol("float").nulld = lambda self: self
-symbol("char*").nulld = lambda self: self
-
+symbol(".", 150)
 
 
 ### BASIC PREFIX OPERATORS ###
@@ -369,7 +368,6 @@ def prefix(ttype, bp):
 # Register operator symbols to symbol_table
 # prefix("!", 20)
 prefix("-", 130)
-prefix("$", 130)  # prefix for global variables
 
 
 ### INFIX OPERATORS ###
@@ -435,6 +433,19 @@ def leftd(self, left):
     return self
 
 
+# Helper method to handle dot notation (struct lookup)
+@method(symbol("."))
+def leftd(self, left):
+    self.first = left
+    self.second = token
+    advance("ID")
+    advance("=")
+    print type(token)
+    self.third = parse_expression()
+    advance()
+    return self
+
+
 # For lists - how to distinguish?
 @method(symbol("["))
 def nulld(self):
@@ -455,21 +466,21 @@ def nulld(self):
     return self
 
 
-# Dictionaries 
+# STRUCTURES 
 @method(symbol("{"))
 def nulld(self):
-    self.first = []
+    members = []
     if token.value != "}":
         while True:
             if token.value == "}":
                 break
-            self.first.append(parse_expression())
-            advance(":")
-            self.first.append(parse_expression())
-            if token.value != ",":
-                break
-            advance(",")
+            members.append(parse_expression())
+            if token.value == ",":
+                advance()
+            if token.value == "\n":
+                advance()
     advance("}")
+    self.first = members
     return self
 
 
@@ -486,34 +497,36 @@ statement("break", 0)
 statement("get", 0)
 statement("continue", 0)
 statement("return", 20)
-# statement("for", 20)
 statement("print", 20)
-statement("elsif", 20)
-statement("else", 20)
 
-# Variable declaration
+# Variable declaration with checks for arrays and structures
 @method(symbol("var"))
 def stmtd(self):
-    self.first = token.value  # variable name
+    self.first = token  # variable name
     advance("ID")
     if not token.ttype in [ 'ID', 'INT', 'FLOAT', 'CHAR', 'BOOL', 'STRUCT', 'LBRACK' ]:
         raise SyntaxError("Expected variable type.")
-    if token.value == "[":  # check if array
+    if token.ttype == 'STRUCT':
+        self.second = token  # variable type
         advance()
-        type = []
-        type.append(token.value)  # array size
-        advance("NUMBER")
-        advance("]")
-        type.append(token.value)  # array type
-        print type
-        self.second = type
-    else:
-        self.second = token.value  # variable type
-    advance()
-    if token.value == "=":
         advance("=")
-        self.third = parse_expression()
-    advance()
+        self.third = parse_expression()  # struct members 
+    else:
+        if token.value == "[":  # check if array
+            advance()
+            type = []
+            type.append(token)  # array size
+            advance("NUMBER")
+            advance("]")
+            type.append(token)  # array type
+            self.second = type
+        else:
+            self.second = token.value  # variable type
+        advance()
+        if token.value == "=":
+            advance("=")
+            self.third = parse_expression()
+        advance()
     return self        
 
 
@@ -563,8 +576,7 @@ def stmtd(self):
             if token.value == "}":
                 break
     self.second = expressions
-    if token.value == "\n":
-        advance()
+    advance()
     advance("}")
     return self
 
