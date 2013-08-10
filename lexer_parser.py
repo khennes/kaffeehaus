@@ -3,10 +3,12 @@ import ply.lex as lex
 import re
 
 """ QUESTIONS, TODO """
-# TODO: Implement structs and dot notation
 # Why no tuples? (explain: tuples vs. lists?)
-# TODO: Constants, global variable $ notation
-# TODO: Make token ttype/value consistent across program... when you have time
+# Implement 'get' (scanf)
+# Add parse_program() function
+# Handle constants?
+# Evaluate!
+# Make token ttype/value consistent across program... when you have time
 
 
 ### GLOBALS ###
@@ -348,7 +350,7 @@ symbol(",")
 symbol("]")
 symbol("}")
 symbol(";")
-symbol("\n").nulld = lambda self: self
+symbol("\n").nulld = lambda self: self  # FIX THIS!
 symbol("[", 150)
 symbol("(", 150)
 symbol(".", 150)
@@ -424,7 +426,22 @@ def method(NewSymbol):
     return bind
 
 
-# Helper method to handle LBRACK (item lookup)
+# Function calls
+@method(symbol("("))
+def leftd(self, left):
+    self.first = left
+    self.second = []
+    if token.value != ")":
+        while True:
+            self.second.append(parse_expression())
+            if token.value != ",":
+                break
+            advance(",")
+    advance(")")
+    return self
+
+
+# Access list items 
 @method(symbol("["))
 def leftd(self, left):
     self.first = left
@@ -433,11 +450,11 @@ def leftd(self, left):
     return self
 
 
-# Helper method to handle dot notation (struct lookup)
+# Dot notation (access struct members) 
 @method(symbol("."))
 def leftd(self, left):
     self.first = left
-    self.second = token
+    self.second = token  # should 1st and 2nd be together?
     advance("ID")
     advance("=")
     print type(token)
@@ -446,7 +463,7 @@ def leftd(self, left):
     return self
 
 
-# For lists - how to distinguish?
+# Lists 
 @method(symbol("["))
 def nulld(self):
     self.first = []
@@ -466,7 +483,7 @@ def nulld(self):
     return self
 
 
-# STRUCTURES 
+# Structures 
 @method(symbol("{"))
 def nulld(self):
     members = []
@@ -484,7 +501,7 @@ def nulld(self):
     return self
 
 
-# Helper method to handle statements
+# Helper method for statements
 def statement(ttype, bp):
     def stmtd(self):
         self.first = parse_expression() 
@@ -499,7 +516,8 @@ statement("continue", 0)
 statement("return", 20)
 statement("print", 20)
 
-# Variable declaration with checks for arrays and structures
+
+# Variable declarations, with checks for arrays and structures
 @method(symbol("var"))
 def stmtd(self):
     self.first = token  # variable name
@@ -521,7 +539,7 @@ def stmtd(self):
             type.append(token)  # array type
             self.second = type
         else:
-            self.second = token.value  # variable type
+            self.second = token  # variable type
         advance()
         if token.value == "=":
             advance("=")
@@ -686,6 +704,7 @@ def stmtd(self):
     self.second = expressions
     advance("}")
     return self
+
 
 
 def main():
