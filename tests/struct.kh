@@ -1,0 +1,7 @@
+var newobject struct = {
+    var member1 int = 5,
+    var member2 int = 10,
+    var member3 int = 15,
+}
+
+newobject.member3 = 0

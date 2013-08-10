@@ -1,0 +1,7 @@
+var x int = 2
+var $y int = 5
+
+def mod(x) {
+    var z int = $y + x
+    return z
+}

@@ -1,0 +1,9 @@
+var x float = 15 / 2 + 6
+
+if (x < 10) {
+    print "x is small"
+} elsif (x == 10) {
+    print "x = 10"
+} else {
+    print "x is big"
+}
