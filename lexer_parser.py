@@ -3,10 +3,12 @@ import ply.lex as lex
 import re
 
 """ QUESTIONS, TODO """
-# Why no tuples? (explain: tuples vs. lists?)
+# Why no tuples?
 # Implement 'get' (scanf)
 # Add parse_program() function
 # Handle constants?
+# BNF grammar!
+# Write up documentation/README
 # Evaluate!
 # Add better error handling
 # Make token ttype/value consistent across program... when you have time
@@ -43,7 +45,7 @@ tokens_list = (
     'ISEQ',
     'ISNOTEQ',
     'GREATER',
-    'LESS',
+    'LESSER',
     'LESSEQ',
     'GREATEQ',
     'BOOLAND',
@@ -91,7 +93,7 @@ reserved = { 'if' : 'IF',
 # Build list of tokens + reserved keywords
 tokens = [ 'NUMBER', 'PLUS', 'MINUS', 'TIMES', 'DIVIDE', 'POWER', 'MODULO',
             'DOT', 'INCREMENT', 'DECREMENT', 'EQUALS', 'PLUSEQ', 'MINUSEQ',
-            'ISEQ', 'ISNOTEQ', 'GREATER', 'LESS', 'LESSEQ', 'GREATEQ',
+            'ISEQ', 'ISNOTEQ', 'GREATER', 'LESSER', 'LESSEQ', 'GREATEQ',
             'BOOLAND', 'BOOLOR', 'NEWLINE', 'COMMA', 'LBRACK', 'RBRACK',
             'LBRACE', 'RBRACE', 'LPAREN', 'RPAREN', 'DEFCONST',
             'INCLUDE', 'COMMENT', 'ID', 'STRING', 'HASH', 'STCOMM', 'ENDCOMM'
@@ -114,7 +116,7 @@ t_MINUSEQ   = r'\-='
 t_ISEQ	    = r'=='
 t_ISNOTEQ   = r'!='
 t_GREATER   = r'>'
-t_LESS	    = r'<'
+t_LESSER    = r'<'
 t_LESSEQ    = r'<='
 t_GREATEQ   = r'>='
 t_BOOLAND   = r'&&'
@@ -203,7 +205,7 @@ def tokenize(token_stream):
         del token_stream[-1]
 
     for token in token_stream:
-        if token.type == "NUMBER" or token.type == "ID" or token.type == "STRING":
+        if token.type in [ 'NUMBER', 'STRING', 'ID' ]:
             symbol = symbol_table[token.type]
         else:
             symbol = symbol_table[token.value]
@@ -214,9 +216,9 @@ def tokenize(token_stream):
     return token_stack
 
 
-def parse(filename=None):
-    global token, token_stack 
-    expression_list = []
+# ADD PARSE_PROGRAM FN HERE 
+def parse_program(filename=None):
+    global token, token_stack
     if not filename:
         filename = raw_input("> ")
     program = open(filename).read()
@@ -224,17 +226,20 @@ def parse(filename=None):
     token_stack = tokenize(token_stream)
     token = token_stack.pop(0)
 
+    expressions = []
     while len(token_stack) > 0:
-        expression = parse_expression()  
-        expression_list.append(expression)
+        expression = parse()
+        expressions.append(expression)
 
     if len(token_stack) == 0:
-        print "ABSTRACT SYNTAX TREE:\n ", expression_list
-        return expression_list
+        return expressions
 
 
-# ADD PARSE_PROGRAM FN HERE 
-    
+def parse():
+    global token, token_stack 
+    expression = parse_expression()  
+    return expression
+
 
 ### ADVANCE ###
 
@@ -261,17 +266,14 @@ def parse_expression(rbp=0):
     global token
     t = token
     advance()
-    print len(token_stack)
     if hasattr(t, "stmtd"):
         left = t.stmtd()
-        print "STATEMENT: ", left
     elif hasattr(t, "nulld"):
         left = t.nulld()
         while rbp < token.leftbp:  # keep going till rbp > current token's bp
             t = token
             advance()
             left = t.leftd(left)
-            print "EXPRESSION: ", left
     else:
         advance()
     return left
@@ -306,6 +308,9 @@ class BaseSymbol:
 
     def leftd(self, left):
         raise SyntaxError("Unknown operator: %r, line %r." % (self.value, self.lineno))
+
+    def eval(self):
+        pass
 
     """ outputs Py string representation of parse tree """
     def __repr__(self):
@@ -365,7 +370,12 @@ def prefix(ttype, bp):
         self.first = parse_expression(bp)   # bp = rbp
         self.second = None
         return self
+    # def eval(self):
+    #    print eval(self.first)
+    #    return eval(self.first)
+        
     symbol(ttype).nulld = nulld             # attach nulld method to symbol,
+    symbol(ttype).eval = eval
                                             # add to symbol_table
 
 # Register operator symbols to symbol_table
@@ -379,8 +389,11 @@ prefix("-", 130)
 def infix(ttype, bp):
     def leftd(self, left):
         self.first = left
-        self.second = parse_expression(bp)  # bp = rbp
+        self.second = parse_expression(bp)
         return self
+    def eval(self):
+        print eval("%r %r %r" % self.first, ttype, self.second)
+        return eval("%r %r %r" % self.first, ttype, self.second)
     symbol(ttype, bp).leftd = leftd
 
 # Register symbols to symbol_table
@@ -458,7 +471,6 @@ def leftd(self, left):
     self.second = token  # should 1st and 2nd be together?
     advance("ID")
     advance("=")
-    print type(token)
     self.third = parse_expression()
     advance()
     return self
@@ -652,7 +664,9 @@ def stmtd(self):
     advance("}")
 
     # check for optional ternary operator
-    if token.value == "else":
+    if token.value == "elsif":
+        self.third = parse_expression()
+    elif token.value == "else":
         self.third = parse_expression()
     return self
 
@@ -710,7 +724,8 @@ def stmtd(self):
 
 def main():
     filename = sys.argv[1] if len(sys.argv) > 1 else None
-    parse(filename)
+    program = parse_program(filename)
+    print "PARSED!\n", program  # program returns None here
 
 if __name__ == "__main__":
     main()
