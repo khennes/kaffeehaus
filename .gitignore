@@ -1,12 +1,12 @@
 ply-3.4
+style.kh
+program.kh
 emscripten
 *.swp
 README.md
-*.kh
 *.pyc
 BNF-grammar.txt
 web
-crumpet
 guess.py
 notes.txt
 outline.txt
