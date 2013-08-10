@@ -8,6 +8,7 @@ import re
 # Add parse_program() function
 # Handle constants?
 # Evaluate!
+# Add better error handling
 # Make token ttype/value consistent across program... when you have time
 
 
@@ -130,7 +131,7 @@ t_STCOMM    = r'\/\*'
 t_ENDCOMM   = r'\*\/'
 
 """
-Function documentation string: takes single argument (instance of LexToken)
+Function documentation strings: take single argument (instance of LexToken)
 LexToken attributes:
 * t.type: token type (as str); defaults to name following t_ prefix 
 * t.value: lexeme (actual text matched)
@@ -141,7 +142,7 @@ LexToken attributes:
 # Ignore tabs, spaces 
 t_ignore = ' \t\v'
 
-# t_NUMBER matches numbers and converts string -> Python integer
+# t_NUMBER matches numbers and converts string to Python integer
 def t_NUMBER(t):
     r'\d+' 
     t.value = int(t.value)
@@ -166,8 +167,8 @@ def t_STRING(t):
 
 # Check identifiers/names against reserved keywords
 def t_ID(t):
-    r'[a-zA-Z_][a-zA-Z_0-9]*'
-    r'$[a-zA-Z_][a-zA-Z_0-9]*'
+    r'\$?[a-zA-Z_][a-zA-Z_0-9]*'
+    #r'$[a-zA-Z_][a-zA-Z_0-9]*'
     t.type = reserved.get(t.value, 'ID')  # default to 'ID' if not a keyword
     return t
 
