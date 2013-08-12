@@ -5,10 +5,9 @@ import re
 """ QUESTIONS, TODO """
 # Why no tuples?
 # Implement 'get' (scanf)
-# Add parse_program() function
+# Check parse_program() function
 # Handle constants?
 # BNF grammar!
-# Write up documentation/README
 # Evaluate!
 # Add better error handling
 # Make token ttype/value consistent across program... when you have time
@@ -18,6 +17,7 @@ import re
 token = None        # contains current token object
 symbol_table = {}   # store instantiated symbol classes
 token_stack = []    # contains remaining tokens
+function_defs = {}  # map fn names to their code objects (for compiling)
 
 
 ### LEXER ###
@@ -216,7 +216,33 @@ def tokenize(token_stream):
     return token_stack
 
 
-# ADD PARSE_PROGRAM FN HERE 
+class Program(object):
+    """ make this inherit from BaseSymbol """
+    def __init__(self):
+        self.lines = []
+
+    def stmtd(self):
+        global token, token_stack
+        while len(token_stack):
+            expr = parse_expression()
+            self.lines.append(expr)
+
+    def eval(self, env=None):
+        for line in self.lines:
+            line.eval()
+
+
+def start_lex(filename=None):
+    global token, token_stack
+    if not filename:
+        filename = raw_input("> ")
+    program = open(filename).read()
+    token_stream = generate_tokens(program)
+    token_stack = tokenize(token_stream)
+    token = token_stack.pop(0)
+    return token_stack
+
+
 def parse_program(filename=None):
     global token, token_stack
     if not filename:
@@ -226,20 +252,10 @@ def parse_program(filename=None):
     token_stack = tokenize(token_stream)
     token = token_stack.pop(0)
 
-    expressions = []
-    while len(token_stack) > 0:
-        expression = parse()
-        expressions.append(expression)
-
-    if len(token_stack) == 0:
-        return expressions
-
-
-def parse():
-    global token, token_stack 
-    expression = parse_expression()  
-    return expression
-
+    p = Program()  # instantiate new instance of class Program
+    p.stmtd()
+    return p
+   
 
 ### ADVANCE ###
 
@@ -309,10 +325,10 @@ class BaseSymbol:
     def leftd(self, left):
         raise SyntaxError("Unknown operator: %r, line %r." % (self.value, self.lineno))
 
-    def eval(self):
+    def eval(self, env=None):
         pass
 
-    """ outputs Py string representation of parse tree """
+    # output Py string representation of abstract syntax tree (AST)
     def __repr__(self):
         if self.ttype in [ 'ID', 'STRING', 'NUMBER' ]:
             return "(%s %s)" % (self.ttype, self.value)
@@ -370,12 +386,12 @@ def prefix(ttype, bp):
         self.first = parse_expression(bp)   # bp = rbp
         self.second = None
         return self
-    # def eval(self):
-    #    print eval(self.first)
-    #    return eval(self.first)
-        
-    symbol(ttype).nulld = nulld             # attach nulld method to symbol,
-    symbol(ttype).eval = eval
+    def eval(self, env=None):
+        return eval("%r %s" % (ttype, self.first))
+    sym = symbol(ttype)
+    sym.nulld = nulld             # attach nulld method to symbol,
+    sym.eval = eval
+    return sym
                                             # add to symbol_table
 
 # Register operator symbols to symbol_table
@@ -392,9 +408,12 @@ def infix(ttype, bp):
         self.second = parse_expression(bp)
         return self
     def eval(self):
-        print eval("%r %r %r" % self.first, ttype, self.second)
-        return eval("%r %r %r" % self.first, ttype, self.second)
-    symbol(ttype, bp).leftd = leftd
+        return eval("%s %s %s" % (self.first, ttype, self.second))
+    sym = symbol(ttype, bp)
+    sym.leftd = leftd
+    sym.eval = eval 
+    return sym
+
 
 # Register symbols to symbol_table
 infix("<", 60)
@@ -415,13 +434,26 @@ infix("%", 120)
 def infix_r(ttype, bp):
     def leftd(self, left):
         self.first = left
-        self.second = parse_expression(bp-1)  # still not certain why...
+        self.second = parse_expression(bp-1)
         return self
-    symbol(ttype, bp).leftd = leftd
+    def eval(self):
+        return eval("%s %s %s" % (self.first, ttype, self.second))
+    sym = symbol(ttype, bp)
+    sym.leftd = leftd
+    sym.eval = eval
+    return sym
+
+#    return sym 
+#    symbol(ttype, bp).leftd = leftd
+#    symbol(ttype, bp).eval = eval
 
 # Register symbols to symbol_table
 # Assignment operators should maybe have their own helper method
-infix_r("=", 10)
+eq_class = infix_r("=", 10)
+# def eval_eq(self, env):
+#    pass
+#eq_class.eval = eval_eq
+
 infix_r("+=", 10)
 infix_r("-=", 10)
 infix_r("||", 30)
@@ -432,7 +464,6 @@ infix_r("**", 140)
 
 
 # Function decorator to avoid repeating code
-# FIND OUT WHAT THIS DOES
 def method(NewSymbol):
     assert issubclass(NewSymbol, BaseSymbol)
     def bind(fn):
@@ -520,11 +551,15 @@ def statement(ttype, bp):
         self.first = parse_expression() 
         self.second = None
         return self
-    # def eval
-    symbol(ttype).stmtd = stmtd
+    def eval(self):
+        return eval("%s %s" % (ttype, self.first))
+    sym = symbol(ttype, bp)
+    sym.stmtd = stmtd
+    sym.eval = eval
+    return sym
 
 statement("break", 0)
-statement("get", 0)
+statement("get", 20)
 statement("continue", 0)
 statement("return", 20)
 statement("print", 20)
@@ -724,8 +759,11 @@ def stmtd(self):
 
 def main():
     filename = sys.argv[1] if len(sys.argv) > 1 else None
-    program = parse_program(filename)
-    print "PARSED!\n", program  # program returns None here
+    start_lex(filename)
+    p = Program()
+    p.stmtd()
+#    program = parse_program(filename)
+    p.eval()
 
 if __name__ == "__main__":
     main()
