@@ -5,10 +5,10 @@ import re
 """ QUESTIONS, TODO """
 # Why no tuples?
 # Implement 'get' (scanf)
-# Check parse_program() function
 # Handle constants?
 # BNF grammar!
 # Evaluate!
+# Add postfix symbols ++ and --
 # Add better error handling
 # Make token ttype/value consistent across program... when you have time
 
@@ -18,6 +18,7 @@ token = None        # contains current token object
 symbol_table = {}   # store instantiated symbol classes
 token_stack = []    # contains remaining tokens
 function_defs = {}  # map fn names to their code objects (for compiling)
+env = {}
 
 
 ### LEXER ###
@@ -216,22 +217,6 @@ def tokenize(token_stream):
     return token_stack
 
 
-class Program(object):
-    """ make this inherit from BaseSymbol """
-    def __init__(self):
-        self.lines = []
-
-    def stmtd(self):
-        global token, token_stack
-        while len(token_stack):
-            expr = parse_expression()
-            self.lines.append(expr)
-
-    def eval(self, env=None):
-        for line in self.lines:
-            line.eval()
-
-
 def start_lex(filename=None):
     global token, token_stack
     if not filename:
@@ -241,6 +226,22 @@ def start_lex(filename=None):
     token_stack = tokenize(token_stream)
     token = token_stack.pop(0)
     return token_stack
+
+
+class Program(object):
+    """ make this inherit from BaseSymbol """
+    def __init__(self):
+        self.lines = []
+
+    def stmtd(self):
+        while len(token_stack):
+            expr = parse_expression()
+            self.lines.append(expr)
+        return self
+
+    def eval(self, env=None):
+        for line in self.lines:
+            line.eval()
 
 
 def parse_program(filename=None):
@@ -272,6 +273,8 @@ def advance(value=None):
     if len(token_stack) > 0:
         next_token = token_stack.pop(0)
         token = next_token
+        if token.value == "\n":
+            advance()
     else:
         return
 
@@ -290,8 +293,6 @@ def parse_expression(rbp=0):
             t = token
             advance()
             left = t.leftd(left)
-    else:
-        advance()
     return left
 
 
@@ -372,7 +373,7 @@ symbol(",")
 symbol("]")
 symbol("}")
 symbol(";")
-symbol("\n").nulld = lambda self: self  # FIX THIS!
+symbol("\n")
 symbol("[", 150)
 symbol("(", 150)
 symbol(".", 150)
@@ -387,7 +388,8 @@ def prefix(ttype, bp):
         self.second = None
         return self
     def eval(self, env=None):
-        return eval("%r %s" % (ttype, self.first))
+    #    return eval("%r %s" % (ttype, self.first))
+        pass
     sym = symbol(ttype)
     sym.nulld = nulld             # attach nulld method to symbol,
     sym.eval = eval
@@ -408,25 +410,99 @@ def infix(ttype, bp):
         self.second = parse_expression(bp)
         return self
     def eval(self):
-        return eval("%s %s %s" % (self.first, ttype, self.second))
+    #    return eval("%s %s %s" % (self.first, ttype, self.second))
+        pass
     sym = symbol(ttype, bp)
     sym.leftd = leftd
     sym.eval = eval 
     return sym
 
 
-# Register symbols to symbol_table
-infix("<", 60)
-infix("<=", 60)
-infix(">", 60)
-infix(">=", 60)
-infix("==", 60)
-infix("!=", 60)
-infix("+", 110)
-infix("-", 110)
-infix("*", 120)
-infix("/", 120)
-infix("%", 120)
+# Register symbols & respective eval methods to symbol_table
+
+# Less than
+lesser_class = infix("<", 60)
+def eval_lesser(self, env):
+    if self.first.eval() < self.second.eval():
+        return True
+    else:
+        return False
+lesser_class.eval = eval_lesser
+
+# Less than or equal
+lesseq_class = infix("<=", 60)
+def eval_lesseq(self, env):
+    if self.first.eval() <= self.second.eval():
+        return True
+    else:
+        return False
+lesseq_class.eval = eval_lesseq
+
+# Greater than
+greater_class = infix(">", 60)
+def eval_greater(self, env):
+    if self.first.eval() > self.second.eval():
+        return True
+    else:
+        return False
+greater_class.eval = eval_greater
+
+# Greater than or equal
+greateq_class = infix(">=", 60)
+def eval_greateq(self, env):
+    if self.first.eval() >= self.second.eval():
+        return True
+    else:
+        return False
+greateq_class.eval = eval_greateq
+
+# Equality
+iseq_class = infix("==", 60)
+def eval_iseq(self, env):
+    if self.first.eval() == self.second.eval():
+        return True
+    else:
+        return False
+iseq_class.eval = eval_iseq
+
+# Non-equality
+isnoteq_class = infix("!=", 60)
+def eval_isnoteq(self, env):
+    if self.first.eval() != self.second.eval():
+        return True
+    else:
+        return False
+isnoteq_class.eval = eval_isnoteq
+
+# Plus
+plus_class = infix("+", 110)
+def eval_plus(self, env):
+    return self.first.eval() + self.second.eval()
+plus_class.eval = eval_plus
+
+# Minus
+minus_class = infix("-", 110)
+def eval_minus(self, env):
+    return self.first.eval() - self.second.eval()
+minus_class.eval = eval_minus
+
+# Multiply
+times_class = infix("*", 120)
+def eval_times(self, env):
+    return self.first.eval() * self.second.eval()
+times_class.eval = eval_times
+
+# Divide
+divide_class = infix("/", 120)
+def eval_divide(self, env):
+    return self.first.eval() / self.second.eval()
+divide_class.eval = eval_divide
+
+# Modulo
+modulo_class = infix("%", 120)
+def eval_modulo(self, env):
+    return self.first.eval() % self.second.eval()
+modulo_class.eval = eval_modulo
 
 
 ### INFIX_R & ASSIGNMENT OPERATORS ###
@@ -437,28 +513,63 @@ def infix_r(ttype, bp):
         self.second = parse_expression(bp-1)
         return self
     def eval(self):
-        return eval("%s %s %s" % (self.first, ttype, self.second))
+        # return _eval("%s %s %s" % (self.first, ttype, self.second))
+        pass
     sym = symbol(ttype, bp)
     sym.leftd = leftd
     sym.eval = eval
     return sym
 
-#    return sym 
-#    symbol(ttype, bp).leftd = leftd
-#    symbol(ttype, bp).eval = eval
 
 # Register symbols to symbol_table
 # Assignment operators should maybe have their own helper method
-eq_class = infix_r("=", 10)
-# def eval_eq(self, env):
-#    pass
-#eq_class.eval = eval_eq
 
-infix_r("+=", 10)
-infix_r("-=", 10)
-infix_r("||", 30)
-infix_r("&&", 40)
-infix_r("**", 140)
+# Assignment
+equals_class = infix_r("=", 10)
+def eval_equals(self, env):
+    symbol_table[self.first] = self.second.eval()
+    return
+equals_class.eval = eval_equals(env)
+
+# Increment
+increment_class = infix_r("+=", 10)
+def eval_increment(self, env):
+    symbol_table[self.first] = self.first + self.second.eval()    
+    return
+increment_class.eval = eval_increment
+
+# Decrement
+decrement_class = infix_r("-=", 10)
+def eval_decrement(self, env):
+    symbol_table[self.first] = self.first - self.second.eval()    
+    return
+decrement_class.eval = eval_decrement
+
+# Boolean 'or'
+boolor_class = infix_r("||", 30)
+def eval_boolor(self, env):
+    if self.first.eval() or self.second.eval():
+        return True
+    else:
+        return False
+boolor_class.eval = eval_boolor
+
+# Boolean 'and'
+booland_class = infix_r("&&", 40)
+def eval_booland(self, env):
+    if self.first.eval() and self.second.eval():
+        return True
+    else:
+        return False
+booland_class.eval = eval_booland
+
+# Exponent 
+power_class = infix_r("**", 140)
+def eval_power(self, env):
+    return self.first.eval() ** self.second.eval()
+power_class.eval = eval_power
+
+
 # infix_r("++", 120)      # postfix?
 # infix_r("--", 120)      # postfix?
 
@@ -561,8 +672,8 @@ def statement(ttype, bp):
 statement("break", 0)
 statement("get", 20)
 statement("continue", 0)
-statement("return", 20)
-statement("print", 20)
+statement("return", 0)
+statement("print", 0)
 
 
 # Variable declarations, with checks for arrays and structures
@@ -746,8 +857,6 @@ def stmtd(self):
     if token.value != "}":
         while True:
             expression = parse_expression()
-            if token.value == "\n":
-                advance()
             expressions.append(expression)
             if token.value == "}":
                 break 
