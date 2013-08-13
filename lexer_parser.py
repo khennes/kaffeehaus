@@ -239,17 +239,13 @@ class Program(object):
 
     def stmtd(self):
         while len(token_stack):
-            print "TOKEN: ", token
             expr = parse_expression()
             self.lines.append(expr)
-        print "EXPRESSIONS:\n", self.lines 
         return self
 
     def eval(self, env=None):
         for line in self.lines:
-            print "LINE: ", line
             result = line.eval()
-            print "EVAL'D: ", result
 
 ##########################
 ######## ADVANCE #########
@@ -290,6 +286,8 @@ def parse_expression(rbp=0):
             t = token
             advance()
             left = t.leftd(left)
+        if token.value == "\n":
+            advance()
     return left
 
 
@@ -579,8 +577,6 @@ def infix_r(ttype, bp):
 equals_class = infix_r("=", 30)
 def eval_equals(self):
     symbol_table[self.first] = self.second.eval()
-    print "SYMBOL TABLE[SELF.FIRST] = ", symbol_table[self.first]
-    print "SELF.FIRST: ", self.first
     return
 equals_class.eval = eval_equals
 
@@ -731,8 +727,8 @@ def eval(self):
 # Helper method for statements
 def statement(ttype, bp):
     def stmtd(self):
-        self.first = token 
-        self.second = parse_expression() 
+        self.first = parse_expression() 
+        self.second = None 
         return self
     #def eval(self):
         # return eval("%s %s" % (ttype, self.first))
@@ -755,7 +751,7 @@ return_class.eval = eval_return
 # Print
 print_class = statement("print", 0)
 def eval_print(self):
-    print self.second.eval()
+    print self.first.eval()
     return
 print_class.eval = eval_print
 
@@ -763,7 +759,6 @@ print_class.eval = eval_print
 # Variable declarations, with checks for arrays and structures
 @method(symbol("var"))
 def stmtd(self):
-    print "VAR TOKEN: ", token
     self.first = token  # store var name as first child node
     advance("ID")
     if not token.ttype in [ 'ID', 'INT', 'FLOAT', 'CHAR', 'BOOL', 'STRUCT', 'LBRACK' ]:
@@ -778,17 +773,16 @@ def stmtd(self):
         self.second= type  # for arrays, type = '[size]type'
     else:
         self.second = token  # variable type
-    advance()
     if token.value == "=":
         advance()
         self.third = parse_expression()
-        advance()
-    print "VAR SELF: ", self
     return self    
 @method(symbol("var"))
 def eval(self):
     if self.third:
-        symbol_table[token.value] = self.third.eval()
+        symbol_table[token.value] = self.third
+    else:
+        symbol_table[token.value] = None  # placeholder (sentinel) value?
     return symbol_table[token.value]
 
 
@@ -937,9 +931,8 @@ def eval(self):
 # Function declarations with "def"
 @method(symbol("def"))
 def stmtd(self):
-    advance()
-    print "HERE'S A DEF!!!!"
     #globalenv[token.value] = None   # = self  # add function name to symbol_table?
+    self.first = token  # store function name as first child node
     advance("ID")
     arguments = []
     advance("(")
@@ -948,14 +941,12 @@ def stmtd(self):
             if token.value == ")":
                 break
             arguments.append(parse_expression())
-            advance()
             if token.value != ",":
                 break
             advance(",")
-    self.first = arguments
+    self.second = arguments
     advance(")")
     advance("{")
-    #advance("\n")
     expressions = []
     if token.value != "}":
         while True:
@@ -963,7 +954,7 @@ def stmtd(self):
             expressions.append(expression)
             if token.value == "}":
                 break 
-    self.second = expressions
+    self.third = expressions
     advance("}")
     #globalenv[token.value] = self
     return self
@@ -978,7 +969,6 @@ def main():
     p = Program() 
     p.stmtd()
     result = p.eval()
-    print "RESULT: ", result
 
 if __name__ == "__main__":
     main()
