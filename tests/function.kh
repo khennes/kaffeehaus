@@ -1,7 +1,10 @@
-var x int = 2
 var $y int = 5
 
-def mod(x) {
+def add(x) {
     var z int = $y + x
+    print z
     return z
 }
+
+var w int = add(2)
+print w
