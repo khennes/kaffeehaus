@@ -15,11 +15,25 @@ import re
 
 ### GLOBALS ###
 token = None        # contains current token object
+# TODO: make a separate table for client program declarations, not shared w/ waffle vm
 symbol_table = {}   # store instantiated symbol classes
 token_stack = []    # contains remaining tokens
 function_defs = {}  # map fn names to their code objects (for compiling)
 env = {}
 
+#scopes = [{}, ....]
+#
+#def lookup(scopes, name):
+#    for scope in scopes:
+#        if name in scope:
+#            return scope[name]
+#    else:
+#        raise NameError
+#
+#def pop_scope(scopes):
+#    pass
+#def add_scope(scopes):
+#    pass
 
 ### LEXER ###
 
@@ -74,7 +88,7 @@ reserved = { 'if' : 'IF',
     'while' : 'WHILE',
     'for' : 'FOR',
     'def' : 'DEF',
-    'typedef' : 'TYPEDEF',
+    'none' : 'NONE',
     'var' : 'VAR',
     'bool' : 'BOOL',
     'true' : 'TRUE',
@@ -235,27 +249,31 @@ class Program(object):
 
     def stmtd(self):
         while len(token_stack):
+            print "TOKEN: ", token
             expr = parse_expression()
             self.lines.append(expr)
+        print "EXPRESSIONS:\n", self.lines 
         return self
 
     def eval(self, env=None):
         for line in self.lines:
-            line.eval()
+            print "LINE: ", line
+            result = line.eval()
+            print "EVAL'D: ", result
 
 
-def parse_program(filename=None):
-    global token, token_stack
-    if not filename:
-        filename = raw_input("> ")
-    program = open(filename).read()
-    token_stream = generate_tokens(program)
-    token_stack = tokenize(token_stream)
-    token = token_stack.pop(0)
-
-    p = Program()  # instantiate new instance of class Program
-    p.stmtd()
-    return p
+#def parse_program(filename=None):
+#    global token, token_stack
+#    if not filename:
+#        filename = raw_input("> ")
+#    program = open(filename).read()
+#    token_stream = generate_tokens(program)
+#    token_stack = tokenize(token_stream)
+#    token = token_stack.pop(0)
+#
+#    p = Program()  # instantiate new instance of class Program
+#    p.stmtd()
+#    return p
    
 
 ### ADVANCE ###
@@ -266,9 +284,9 @@ def advance(value=None):
     if value:
         if token.ttype in [ 'ID', 'STRING', 'NUMBER' ]:
             if token.ttype != value:
-                raise SyntaxError("Expected %r, not %r" % (value, token.value))
+                raise SyntaxError("Expected %r, not %r on %s" % (value, token.value, token.lineno))
         elif token.value != value:
-            raise SyntaxError("Expected %r, not %r" % (value, token.value))
+            raise SyntaxError("Expected %r, not %r on %s" % (value, token.value, token.lineno))
     
     if len(token_stack) > 0:
         next_token = token_stack.pop(0)
@@ -310,6 +328,7 @@ def parse_statement():
 # base class for operators
 class BaseSymbol:
     def __init__(self, ttype, value, lineno, lexpos):
+
         self.ttype = ttype
         self.value = value
         self.lineno = lineno
@@ -325,9 +344,6 @@ class BaseSymbol:
 
     def leftd(self, left):
         raise SyntaxError("Unknown operator: %r, line %r." % (self.value, self.lineno))
-
-    def eval(self, env=None):
-        pass
 
     # output Py string representation of abstract syntax tree (AST)
     def __repr__(self):
@@ -357,17 +373,69 @@ def symbol(ttype, bp=0):
         NewSymbol.leftbp = max(bp, NewSymbol.leftbp)
     return NewSymbol
 
+
 # Register simple tokens to symbol_table
-symbol("ID").nulld = lambda self: self  # variables and function names
+
+symbol("ID").nulld = lambda self: self
+ID_class = symbol("ID")
+def eval_id(self):
+    return symbol_table[token.value]
+ID_class.eval = eval_id
+
 symbol("NUMBER").nulld = lambda self: self
+num_class = symbol("NUMBER")
+def eval_num(self):
+    return self.value 
+num_class.eval = eval_num
+
 symbol("STRING").nulld = lambda self: self
+string_class = symbol("STRING")
+def eval_string(self):
+    return self.value
+string_class.eval = eval_string
+
 symbol("true").nulld = lambda self: self
+true_class = symbol("true")
+def eval_true(self):
+    return True 
+true_class.eval = eval_true
+
 symbol("false").nulld = lambda self: self
+false_class = symbol("false")
+def eval_false(self):
+    return False 
+false_class.eval = eval_false
+
+symbol("none").nulld = lambda self: self
+none_class = symbol("none")
+def eval_none(self):
+    return None 
+none_class.eval = eval_none
+
 symbol("int").nulld = lambda self: self
+int_class = symbol("int")
+def eval_int(self):
+    pass
+int_class.eval = eval_int
+
 symbol("bool").nulld = lambda self: self
+bool_class = symbol("bool")
+def eval_bool(self):
+    pass
+bool_class.eval = eval_bool
+
 symbol("float").nulld = lambda self: self
-symbol("char*").nulld = lambda self: self
+float_class = symbol("float")
+def eval_float(self):
+    pass
+float_class.eval = eval_float
+
 symbol("struct").nulld = lambda self: self
+struct_class = symbol("struct")
+def eval_struct(self):
+    pass
+struct_class.eval = eval_struct 
+
 symbol(")")
 symbol(",")
 symbol("]")
@@ -379,26 +447,28 @@ symbol("(", 150)
 symbol(".", 150)
 
 
-### BASIC PREFIX OPERATORS ###
+### basic prefix operators ###
 
-# Helper method for nulld method: THERE IS NO LEFT
+# helper method for nulld method: there is no left
 def prefix(ttype, bp):
     def nulld(self):                        # attach nodes to nulld method
         self.first = parse_expression(bp)   # bp = rbp
         self.second = None
         return self
-    def eval(self, env=None):
+    #def eval(self, env=None):
     #    return eval("%r %s" % (ttype, self.first))
-        pass
+    #    pass
     sym = symbol(ttype)
-    sym.nulld = nulld             # attach nulld method to symbol,
-    sym.eval = eval
+    sym.nulld = nulld           # attach nulld, eval methods to symbol,
+    sym.eval = eval             # add to symbol_table
     return sym
-                                            # add to symbol_table
 
 # Register operator symbols to symbol_table
 # prefix("!", 20)
-prefix("-", 130)
+negative_class = prefix("-", 130)
+def eval_negative(self):
+    return -(self.first.eval())
+negative_class.eval = eval_negative
 
 
 ### INFIX OPERATORS ###
@@ -409,9 +479,9 @@ def infix(ttype, bp):
         self.first = left
         self.second = parse_expression(bp)
         return self
-    def eval(self):
+    #def eval(self):
     #    return eval("%s %s %s" % (self.first, ttype, self.second))
-        pass
+    #    pass
     sym = symbol(ttype, bp)
     sym.leftd = leftd
     sym.eval = eval 
@@ -422,7 +492,7 @@ def infix(ttype, bp):
 
 # Less than
 lesser_class = infix("<", 60)
-def eval_lesser(self, env):
+def eval_lesser(self):
     if self.first.eval() < self.second.eval():
         return True
     else:
@@ -431,7 +501,7 @@ lesser_class.eval = eval_lesser
 
 # Less than or equal
 lesseq_class = infix("<=", 60)
-def eval_lesseq(self, env):
+def eval_lesseq(self):
     if self.first.eval() <= self.second.eval():
         return True
     else:
@@ -440,7 +510,7 @@ lesseq_class.eval = eval_lesseq
 
 # Greater than
 greater_class = infix(">", 60)
-def eval_greater(self, env):
+def eval_greater(self):
     if self.first.eval() > self.second.eval():
         return True
     else:
@@ -449,7 +519,7 @@ greater_class.eval = eval_greater
 
 # Greater than or equal
 greateq_class = infix(">=", 60)
-def eval_greateq(self, env):
+def eval_greateq(self):
     if self.first.eval() >= self.second.eval():
         return True
     else:
@@ -458,7 +528,7 @@ greateq_class.eval = eval_greateq
 
 # Equality
 iseq_class = infix("==", 60)
-def eval_iseq(self, env):
+def eval_iseq(self):
     if self.first.eval() == self.second.eval():
         return True
     else:
@@ -467,7 +537,7 @@ iseq_class.eval = eval_iseq
 
 # Non-equality
 isnoteq_class = infix("!=", 60)
-def eval_isnoteq(self, env):
+def eval_isnoteq(self):
     if self.first.eval() != self.second.eval():
         return True
     else:
@@ -476,31 +546,31 @@ isnoteq_class.eval = eval_isnoteq
 
 # Plus
 plus_class = infix("+", 110)
-def eval_plus(self, env):
+def eval_plus(self):
     return self.first.eval() + self.second.eval()
 plus_class.eval = eval_plus
 
 # Minus
 minus_class = infix("-", 110)
-def eval_minus(self, env):
+def eval_minus(self):
     return self.first.eval() - self.second.eval()
 minus_class.eval = eval_minus
 
 # Multiply
 times_class = infix("*", 120)
-def eval_times(self, env):
+def eval_times(self):
     return self.first.eval() * self.second.eval()
 times_class.eval = eval_times
 
 # Divide
 divide_class = infix("/", 120)
-def eval_divide(self, env):
+def eval_divide(self):
     return self.first.eval() / self.second.eval()
 divide_class.eval = eval_divide
 
 # Modulo
 modulo_class = infix("%", 120)
-def eval_modulo(self, env):
+def eval_modulo(self):
     return self.first.eval() % self.second.eval()
 modulo_class.eval = eval_modulo
 
@@ -512,9 +582,9 @@ def infix_r(ttype, bp):
         self.first = left
         self.second = parse_expression(bp-1)
         return self
-    def eval(self):
+    #def eval(self):
         # return _eval("%s %s %s" % (self.first, ttype, self.second))
-        pass
+    #    pass
     sym = symbol(ttype, bp)
     sym.leftd = leftd
     sym.eval = eval
@@ -525,29 +595,31 @@ def infix_r(ttype, bp):
 # Assignment operators should maybe have their own helper method
 
 # Assignment
-equals_class = infix_r("=", 10)
-def eval_equals(self, env):
+equals_class = infix_r("=", 30)
+def eval_equals(self):
     symbol_table[self.first] = self.second.eval()
+    print "SYMBOL TABLE[SELF.FIRST] = ", symbol_table[self.first]
+    print "SELF.FIRST: ", self.first
     return
-equals_class.eval = eval_equals(env)
+equals_class.eval = eval_equals
 
 # Increment
 increment_class = infix_r("+=", 10)
-def eval_increment(self, env):
+def eval_increment(self):
     symbol_table[self.first] = self.first + self.second.eval()    
     return
 increment_class.eval = eval_increment
 
 # Decrement
 decrement_class = infix_r("-=", 10)
-def eval_decrement(self, env):
+def eval_decrement(self):
     symbol_table[self.first] = self.first - self.second.eval()    
     return
 decrement_class.eval = eval_decrement
 
 # Boolean 'or'
 boolor_class = infix_r("||", 30)
-def eval_boolor(self, env):
+def eval_boolor(self):
     if self.first.eval() or self.second.eval():
         return True
     else:
@@ -556,7 +628,7 @@ boolor_class.eval = eval_boolor
 
 # Boolean 'and'
 booland_class = infix_r("&&", 40)
-def eval_booland(self, env):
+def eval_booland(self):
     if self.first.eval() and self.second.eval():
         return True
     else:
@@ -565,7 +637,7 @@ booland_class.eval = eval_booland
 
 # Exponent 
 power_class = infix_r("**", 140)
-def eval_power(self, env):
+def eval_power(self):
     return self.first.eval() ** self.second.eval()
 power_class.eval = eval_power
 
@@ -595,6 +667,9 @@ def leftd(self, left):
             advance(",")
     advance(")")
     return self
+@method(symbol("("))
+def eval(self):
+    pass
 
 
 # Access list items 
@@ -604,6 +679,9 @@ def leftd(self, left):
     self.second = parse_expression()
     advance("]")
     return self
+@method(symbol("["))
+def eval(self):
+    pass
 
 
 # Dot notation (access struct members) 
@@ -616,6 +694,9 @@ def leftd(self, left):
     self.third = parse_expression()
     advance()
     return self
+@method(symbol("."))
+def eval(self):
+    pass
 
 
 # Lists 
@@ -636,6 +717,9 @@ def nulld(self):
     if token.value == "\n":
         advance()
     return self
+@method(symbol("["))
+def eval(self):
+    pass
 
 
 # Structures 
@@ -654,6 +738,9 @@ def nulld(self):
     advance("}")
     self.first = members
     return self
+@method(symbol("{"))
+def eval(self):
+    pass
 
 
 # Helper method for statements
@@ -662,8 +749,9 @@ def statement(ttype, bp):
         self.first = parse_expression() 
         self.second = None
         return self
-    def eval(self):
-        return eval("%s %s" % (ttype, self.first))
+    #def eval(self):
+        # return eval("%s %s" % (ttype, self.first))
+    #    pass
     sym = symbol(ttype, bp)
     sym.stmtd = stmtd
     sym.eval = eval
@@ -672,40 +760,51 @@ def statement(ttype, bp):
 statement("break", 0)
 statement("get", 20)
 statement("continue", 0)
-statement("return", 0)
-statement("print", 0)
+
+# Return
+return_class = statement("return", 0)
+def eval_return(self):
+    return self
+return_class.eval = eval_return
+
+# Print
+print_class = statement("print", 0)
+def eval_print(self):
+    print self.first.eval()
+    return
+print_class.eval = eval_print
 
 
 # Variable declarations, with checks for arrays and structures
 @method(symbol("var"))
 def stmtd(self):
-    self.first = token  # variable name
+    self = token  # variable name
+    symbol_table[token.value] = None
     advance("ID")
     if not token.ttype in [ 'ID', 'INT', 'FLOAT', 'CHAR', 'BOOL', 'STRUCT', 'LBRACK' ]:
         raise SyntaxError("Expected variable type.")
-    if token.ttype == 'STRUCT':
-        self.second = token  # variable type
+    if token.value == "[":  # check if array
         advance()
-        advance("=")
-        self.third = parse_expression()  # struct members 
+        type = []
+        type.append(token)  # array size
+        advance("NUMBER")
+        advance("]")
+        type.append(token)  # array type
+        self.first = type  # for arrays, type = '[size]type'
     else:
-        if token.value == "[":  # check if array
-            advance()
-            type = []
-            type.append(token)  # array size
-            advance("NUMBER")
-            advance("]")
-            type.append(token)  # array type
-            self.second = type
-        else:
-            self.second = token  # variable type
+        self.first = token  # variable type
+    advance()
+    if token.value == "=":
         advance()
-        if token.value == "=":
-            advance("=")
-            self.third = parse_expression()
+        self.second = parse_expression()
         advance()
-    return self        
-
+    print "VAR SELF: ", self
+    return self    
+@method(symbol("var"))
+def eval(self):
+    if self.second:
+        symbol_table[self.value] = self.second.eval()
+    return symbol_table[self.value]
 
 # While-loop statements
 @method(symbol("while"))
@@ -727,7 +826,9 @@ def stmtd(self):
     self.second = expressions
     advance("}")
     return self
-    
+@method(symbol("while"))
+def eval(self):
+    pass
 
 # For-loop statements
 @method(symbol("for"))
@@ -756,13 +857,16 @@ def stmtd(self):
     advance()
     advance("}")
     return self
+@method(symbol("for"))
+def eval(self):
+    pass
 
             
 # If/elsif/else conditional statements 
 @method(symbol("if"))
 def stmtd(self):
     advance("(")
-    self.first = parse_expression()  # condition
+    self.first = parse_expression()  # predicate 
     advance(")")
     advance("{")
     if token.value == "\n":
@@ -786,12 +890,15 @@ def stmtd(self):
     elif token.value == "else":
         self.third = parse_expression()
     return self
+@method(symbol("id"))
+def eval(self):
+    pass
 
 
 @method(symbol("elsif"))
 def stmtd(self):
     advance("(")
-    self.first = parse_expression()  # condition
+    self.first = parse_expression()  # predicate 
     advance(")")
     advance("{")
     if token.value == "\n":
@@ -815,6 +922,9 @@ def stmtd(self):
     elif token.value == "else":
         self.third = parse_expression()
     return self
+@method(symbol("elsif"))
+def eval(self):
+    pass
 
 
 @method(symbol("else"))
@@ -833,11 +943,17 @@ def stmtd(self):
     advance("}")
     self.first = expressions
     return self
+@method(symbol("else"))
+def eval(self):
+    pass
 
 
 # Function declarations with "def"
 @method(symbol("def"))
 def stmtd(self):
+    advance()
+    print "HERE'S A DEF!!!!"
+    symbol_table[token.value] = self  # function name
     advance("ID")
     arguments = []
     advance("(")
@@ -846,13 +962,14 @@ def stmtd(self):
             if token.value == ")":
                 break
             arguments.append(parse_expression())
+            advance()
             if token.value != ",":
                 break
             advance(",")
     self.first = arguments
     advance(")")
     advance("{")
-    advance("\n")
+    #advance("\n")
     expressions = []
     if token.value != "}":
         while True:
@@ -863,16 +980,18 @@ def stmtd(self):
     self.second = expressions
     advance("}")
     return self
-
+@method(symbol("def"))
+def eval(self):
+    return self
 
 
 def main():
     filename = sys.argv[1] if len(sys.argv) > 1 else None
     start_lex(filename)
-    p = Program()
+    p = Program() 
     p.stmtd()
-#    program = parse_program(filename)
-    p.eval()
+    result = p.eval()
+    print "RESULT: ", result
 
 if __name__ == "__main__":
     main()
