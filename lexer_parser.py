@@ -5,7 +5,7 @@ import re
 """ QUESTIONS, TODO """
 # Why no tuples?
 # Implement 'get' (scanf)
-# Handle constants?
+# Handle constants
 # BNF grammar!
 # Evaluate!
 # Add postfix symbols ++ and --
@@ -21,9 +21,9 @@ function_defs = {}  # map fn names to their code objects (for compiling)
 #globalenv = {}     # store declared variables in separate table
 
 
-#####################
-####### LEXER #######
-#####################
+#############################
+####### DEFINE TOKENS #######
+#############################
 
 tokens_list = (
     'NUMBER',
@@ -355,7 +355,8 @@ def symbol(ttype, bp=0):
 symbol("ID").nulld = lambda self: self
 ID_class = symbol("ID")
 def eval_id(self):
-    return token.value 
+    symbol_table[token.value] = symbol_table.get(token.value, None)
+    return symbol_table[token.value]
 ID_class.eval = eval_id
 
 symbol("NUMBER").nulld = lambda self: self
@@ -619,10 +620,6 @@ def eval_power(self):
 power_class.eval = eval_power
 
 
-# infix_r("++", 120)      # postfix?
-# infix_r("--", 120)      # postfix?
-
-
 ########################################
 ######## SPECIAL CASE HANDLERS #########
 ########################################
@@ -752,14 +749,16 @@ return_class.eval = eval_return
 print_class = statement("print", 0)
 def eval_print(self):
     print self.first.eval()
-    return
 print_class.eval = eval_print
 
 
 # Variable declarations, with checks for arrays and structures
 @method(symbol("var"))
 def stmtd(self):
-    self.first = token  # store var name as first child node
+    # Store new var name as firt child node of var and register to symbol table
+    self.first = token.value
+    symbol_table[token.value] = None 
+
     advance("ID")
     if not token.ttype in [ 'ID', 'INT', 'FLOAT', 'CHAR', 'BOOL', 'STRUCT', 'LBRACK' ]:
         raise SyntaxError("Expected variable type.")
@@ -769,21 +768,20 @@ def stmtd(self):
         type.append(token)  # array size
         advance("NUMBER")
         advance("]")
-        type.append(token)  # array type
-        self.second= type  # for arrays, type = '[size]type'
+        type.append(token.value)  # array type
+        self.second = type  # for arrays, type = '[size]type'
     else:
-        self.second = token  # variable type
+        self.second = token.value  # variable type
+    advance()
     if token.value == "=":
         advance()
         self.third = parse_expression()
     return self    
 @method(symbol("var"))
 def eval(self):
-    if self.third:
-        symbol_table[token.value] = self.third
-    else:
-        symbol_table[token.value] = None  # placeholder (sentinel) value?
-    return symbol_table[token.value]
+    if hasattr(self, "third"):
+        symbol_table[token.value] = self.third.eval()
+    pass
 
 
 # While-loop statements
