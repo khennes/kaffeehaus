@@ -584,7 +584,7 @@ equals_class.eval = eval_equals
 # Increment
 increment_class = infix_r("+=", 10)
 def eval_increment(self):
-    symbol_table[self.first] = self.first + self.second.eval()    
+    symbol_table[self.first.value] = symbol_table[self.first.value] + self.second.eval()    
     return
 increment_class.eval = eval_increment
 
@@ -739,11 +739,13 @@ statement("break", 0)
 statement("get", 20)
 statement("continue", 0)
 
+
 # Return
 return_class = statement("return", 0)
 def eval_return(self):
-    return self
+    return self.first.eval()
 return_class.eval = eval_return
+
 
 # Print
 print_class = statement("print", 0)
@@ -806,7 +808,12 @@ def stmtd(self):
     return self
 @method(symbol("while"))
 def eval(self):
-    pass
+    while self.first.eval() == True:
+        for each in self.second:
+            each.eval()
+        if self.first.eval() == False:
+            break
+
 
 # For-loop statements
 @method(symbol("for"))
@@ -870,7 +877,10 @@ def stmtd(self):
     return self
 @method(symbol("if"))
 def eval(self):
-    pass
+    if self.first.eval() == True:
+        return self.second.eval()
+    else:
+        return self.third.eval()
 
 
 @method(symbol("elsif"))
@@ -902,7 +912,10 @@ def stmtd(self):
     return self
 @method(symbol("elsif"))
 def eval(self):
-    pass
+    if self.first.eval() == True:
+        return self.second.eval()
+    else:
+        return self.third.eval()
 
 
 @method(symbol("else"))
@@ -923,14 +936,15 @@ def stmtd(self):
     return self
 @method(symbol("else"))
 def eval(self):
-    pass
-
+    return self.first.eval()
+    
 
 # Function declarations with "def"
 @method(symbol("def"))
 def stmtd(self):
     #globalenv[token.value] = None   # = self  # add function name to symbol_table?
-    self.first = token  # store function name as first child node
+    self.first = token.value  # store function name as first child node
+    symbol_table[token.value] = None 
     advance("ID")
     arguments = []
     advance("(")
@@ -958,7 +972,8 @@ def stmtd(self):
     return self
 @method(symbol("def"))
 def eval(self):
-    return self
+    symbol_table[token.value] = self.third
+    pass
 
 
 def main():
