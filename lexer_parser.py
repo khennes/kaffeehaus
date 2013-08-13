@@ -15,27 +15,15 @@ import re
 
 ### GLOBALS ###
 token = None        # contains current token object
-# TODO: make a separate table for client program declarations, not shared w/ waffle vm
 symbol_table = {}   # store instantiated symbol classes
 token_stack = []    # contains remaining tokens
 function_defs = {}  # map fn names to their code objects (for compiling)
-env = {}
+#globalenv = {}     # store declared variables in separate table
 
-#scopes = [{}, ....]
-#
-#def lookup(scopes, name):
-#    for scope in scopes:
-#        if name in scope:
-#            return scope[name]
-#    else:
-#        raise NameError
-#
-#def pop_scope(scopes):
-#    pass
-#def add_scope(scopes):
-#    pass
 
-### LEXER ###
+#####################
+####### LEXER #######
+#####################
 
 tokens_list = (
     'NUMBER',
@@ -195,7 +183,9 @@ def t_error(t):
     t.lexer.skip(1)
 
 
-### CALL LEXING & PARSING FUNCTIONS ###
+#########################################
+#### CALL LEXING & PARSING FUNCTIONS ####
+#########################################
 
 def generate_tokens(program):    
     print program
@@ -261,22 +251,9 @@ class Program(object):
             result = line.eval()
             print "EVAL'D: ", result
 
-
-#def parse_program(filename=None):
-#    global token, token_stack
-#    if not filename:
-#        filename = raw_input("> ")
-#    program = open(filename).read()
-#    token_stream = generate_tokens(program)
-#    token_stack = tokenize(token_stream)
-#    token = token_stack.pop(0)
-#
-#    p = Program()  # instantiate new instance of class Program
-#    p.stmtd()
-#    return p
-   
-
-### ADVANCE ###
+##########################
+######## ADVANCE #########
+##########################
 
 # Check for errors before fetching next token
 def advance(value=None):
@@ -297,7 +274,9 @@ def advance(value=None):
         return
 
 
-### EXPRESSION PARSER ###
+##########################################
+##### EXPRESSION & STATEMENT PARSERS #####
+##########################################
 
 def parse_expression(rbp=0):
     global token
@@ -314,8 +293,6 @@ def parse_expression(rbp=0):
     return left
 
 
-### STATEMENT PARSER ###
-
 # Parse a single statement
 def parse_statement():
     global token
@@ -323,9 +300,10 @@ def parse_statement():
     return t.stmtd()
 
 
-### TOKEN CLASSES ###
+##################################
+#### CREATE BASE TOKEN CLASS #####
+##################################
 
-# base class for operators
 class BaseSymbol:
     def __init__(self, ttype, value, lineno, lexpos):
 
@@ -354,10 +332,10 @@ class BaseSymbol:
         return "(" + " ".join(out) + ")"
 
 
-### SYMBOL FACTORY ###
-# Creates new symbol classes as needed
-# Binding power: how tightly expression binds to tokens on right side
-# Ex. "1 + 2 * 4", * has higher bp, so it 'wins' 2.
+#############################################
+############## SYMBOL FACTORY ###############
+#### Create new symbol classes as needed ####
+#############################################
 
 def symbol(ttype, bp=0):
     try:
@@ -379,7 +357,7 @@ def symbol(ttype, bp=0):
 symbol("ID").nulld = lambda self: self
 ID_class = symbol("ID")
 def eval_id(self):
-    return symbol_table[token.value]
+    return token.value 
 ID_class.eval = eval_id
 
 symbol("NUMBER").nulld = lambda self: self
@@ -447,9 +425,10 @@ symbol("(", 150)
 symbol(".", 150)
 
 
-### basic prefix operators ###
+#######################################
+########## PREFIX OPERATORS ###########
+#######################################
 
-# helper method for nulld method: there is no left
 def prefix(ttype, bp):
     def nulld(self):                        # attach nodes to nulld method
         self.first = parse_expression(bp)   # bp = rbp
@@ -471,9 +450,10 @@ def eval_negative(self):
 negative_class.eval = eval_negative
 
 
-### INFIX OPERATORS ###
+#######################################
+########## INFIX OPERATORS ############
+#######################################
 
-# Helper method for leftd method: THERE IS A LEFT
 def infix(ttype, bp):
     def leftd(self, left):
         self.first = left
@@ -575,7 +555,9 @@ def eval_modulo(self):
 modulo_class.eval = eval_modulo
 
 
-### INFIX_R & ASSIGNMENT OPERATORS ###
+########################################
+#### INFIX_R & ASSIGNMENT OPERATORS ####
+########################################
 
 def infix_r(ttype, bp):
     def leftd(self, left):
@@ -591,8 +573,7 @@ def infix_r(ttype, bp):
     return sym
 
 
-# Register symbols to symbol_table
-# Assignment operators should maybe have their own helper method
+# Register symbols & respective eval methods to symbol_table
 
 # Assignment
 equals_class = infix_r("=", 30)
@@ -645,6 +626,10 @@ power_class.eval = eval_power
 # infix_r("++", 120)      # postfix?
 # infix_r("--", 120)      # postfix?
 
+
+########################################
+######## SPECIAL CASE HANDLERS #########
+########################################
 
 # Function decorator to avoid repeating code
 def method(NewSymbol):
@@ -746,8 +731,8 @@ def eval(self):
 # Helper method for statements
 def statement(ttype, bp):
     def stmtd(self):
-        self.first = parse_expression() 
-        self.second = None
+        self.first = token 
+        self.second = parse_expression() 
         return self
     #def eval(self):
         # return eval("%s %s" % (ttype, self.first))
@@ -770,7 +755,7 @@ return_class.eval = eval_return
 # Print
 print_class = statement("print", 0)
 def eval_print(self):
-    print self.first.eval()
+    print self.second.eval()
     return
 print_class.eval = eval_print
 
@@ -778,8 +763,8 @@ print_class.eval = eval_print
 # Variable declarations, with checks for arrays and structures
 @method(symbol("var"))
 def stmtd(self):
-    self = token  # variable name
-    symbol_table[token.value] = None
+    print "VAR TOKEN: ", token
+    self.first = token  # store var name as first child node
     advance("ID")
     if not token.ttype in [ 'ID', 'INT', 'FLOAT', 'CHAR', 'BOOL', 'STRUCT', 'LBRACK' ]:
         raise SyntaxError("Expected variable type.")
@@ -790,21 +775,22 @@ def stmtd(self):
         advance("NUMBER")
         advance("]")
         type.append(token)  # array type
-        self.first = type  # for arrays, type = '[size]type'
+        self.second= type  # for arrays, type = '[size]type'
     else:
-        self.first = token  # variable type
+        self.second = token  # variable type
     advance()
     if token.value == "=":
         advance()
-        self.second = parse_expression()
+        self.third = parse_expression()
         advance()
     print "VAR SELF: ", self
     return self    
 @method(symbol("var"))
 def eval(self):
-    if self.second:
-        symbol_table[self.value] = self.second.eval()
-    return symbol_table[self.value]
+    if self.third:
+        symbol_table[token.value] = self.third.eval()
+    return symbol_table[token.value]
+
 
 # While-loop statements
 @method(symbol("while"))
@@ -890,7 +876,7 @@ def stmtd(self):
     elif token.value == "else":
         self.third = parse_expression()
     return self
-@method(symbol("id"))
+@method(symbol("if"))
 def eval(self):
     pass
 
@@ -953,7 +939,7 @@ def eval(self):
 def stmtd(self):
     advance()
     print "HERE'S A DEF!!!!"
-    symbol_table[token.value] = self  # function name
+    #globalenv[token.value] = None   # = self  # add function name to symbol_table?
     advance("ID")
     arguments = []
     advance("(")
@@ -979,6 +965,7 @@ def stmtd(self):
                 break 
     self.second = expressions
     advance("}")
+    #globalenv[token.value] = self
     return self
 @method(symbol("def"))
 def eval(self):
