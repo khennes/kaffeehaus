@@ -7,7 +7,6 @@ import re
 # Implement 'get' (scanf)
 # Handle constants
 # BNF grammar!
-# Evaluate!
 # Add postfix symbols ++ and --
 # Add better error handling
 # Make token ttype/value consistent across program... when you have time
@@ -18,7 +17,7 @@ token = None        # contains current token object
 symbol_table = {}   # store instantiated symbol classes
 token_stack = []    # contains remaining tokens
 function_defs = {}  # map fn names to their code objects (for compiling)
-#globalenv = {}     # store declared variables in separate table
+globalenv = {}      # store declared variables in separate table
 
 
 #############################
@@ -150,7 +149,8 @@ t_ignore = ' \t\v'
 # t_NUMBER matches numbers and converts string to Python integer
 def t_NUMBER(t):
     r'\d+' 
-    t.value = int(t.value)
+    r'[-+]?[0-9]*\.?[0-9]+'  # floating point numbers (does not handle exponents
+    t.value = int(t.value)   # or scientific notation)
     return t
 
 # Track line numbers
@@ -245,7 +245,7 @@ class Program(object):
 
     def eval(self, env=None):
         for line in self.lines:
-            result = line.eval()
+            result = line.eval()  # pass in globalenv here?
 
 ##########################
 ######## ADVANCE #########
@@ -354,7 +354,7 @@ def symbol(ttype, bp=0):
 
 symbol("ID").nulld = lambda self: self
 ID_class = symbol("ID")
-def eval_id(self):
+def eval_id(self, globalenv):
     symbol_table[self.value] = symbol_table.get(self.value, None)
     return symbol_table[self.value]
 def emit_id(self):
@@ -364,7 +364,7 @@ ID_class.emit = emit_id
 
 symbol("NUMBER").nulld = lambda self: self
 num_class = symbol("NUMBER")
-def eval_num(self):
+def eval_num(self, globalenv):
     return self.value 
 def emit_num(self):
     print self.value
@@ -373,7 +373,7 @@ num_class.emit = emit_num
 
 symbol("STRING").nulld = lambda self: self
 string_class = symbol("STRING")
-def eval_string(self):
+def eval_string(self, globalenv):
     return self.value[1:-1]  # print out sans quotes
 def emit_string(self):
     print self.value
@@ -382,7 +382,7 @@ string_class.emit = emit_string
 
 symbol("true").nulld = lambda self: self
 true_class = symbol("true")
-def eval_true(self):
+def eval_true(self, globalenv):
     return True 
 def emit_true(self):
     print self.value
@@ -391,7 +391,7 @@ true_class.emit = emit_true
 
 symbol("false").nulld = lambda self: self
 false_class = symbol("false")
-def eval_false(self):
+def eval_false(self, globalenv):
     return False 
 def emit_false(self):
     print self.value
@@ -400,7 +400,7 @@ false_class.emit = emit_false
 
 symbol("none").nulld = lambda self: self
 none_class = symbol("none")
-def eval_none(self):
+def eval_none(self, globalenv):
     return None 
 def emit_none(self):
     print self.value
@@ -409,7 +409,7 @@ none_class.emit = emit_none
 
 symbol("int").nulld = lambda self: self
 int_class = symbol("int")
-def eval_int(self):
+def eval_int(self, globalenv):
     pass
 def emit_int(self):
     print self.value
@@ -418,7 +418,7 @@ int_class.emit = emit_int
 
 symbol("bool").nulld = lambda self: self
 bool_class = symbol("bool")
-def eval_bool(self):
+def eval_bool(self, globalenv):
     pass
 def emit_bool(self):
     print self.value
@@ -427,7 +427,7 @@ bool_class.emit = emit_bool
 
 symbol("float").nulld = lambda self: self
 float_class = symbol("float")
-def eval_float(self):
+def eval_float(self, globalenv):
     pass
 def emit_float(self):
     print self.value
@@ -436,7 +436,7 @@ float_class.emit = emit_float
 
 symbol("struct").nulld = lambda self: self
 struct_class = symbol("struct")
-def eval_struct(self):
+def eval_struct(self, globalenv):
     pass
 def emit_struct(self):
     print self.value
@@ -474,7 +474,7 @@ def prefix(ttype, bp):
 # Register operator symbols to symbol_table
 # prefix("!", 20)
 negative_class = prefix("-", 130)
-def eval_negative(self):
+def eval_negative(self, globalenv):
     return -(self.first.eval())
 negative_class.eval = eval_negative
 
@@ -501,7 +501,7 @@ def infix(ttype, bp):
 
 # Less than
 lesser_class = infix("<", 60)
-def eval_lesser(self):
+def eval_lesser(self, globalenv):
     if self.first.eval() < self.second.eval():
         return True
     else:
@@ -510,7 +510,7 @@ lesser_class.eval = eval_lesser
 
 # Less than or equal
 lesseq_class = infix("<=", 60)
-def eval_lesseq(self):
+def eval_lesseq(self, globalenv):
     if self.first.eval() <= self.second.eval():
         return True
     else:
@@ -519,7 +519,7 @@ lesseq_class.eval = eval_lesseq
 
 # Greater than
 greater_class = infix(">", 60)
-def eval_greater(self):
+def eval_greater(self, globalenv):
     if self.first.eval() > self.second.eval():
         return True
     else:
@@ -528,7 +528,7 @@ greater_class.eval = eval_greater
 
 # Greater than or equal
 greateq_class = infix(">=", 60)
-def eval_greateq(self):
+def eval_greateq(self, globalenv):
     if self.first.eval() >= self.second.eval():
         return True
     else:
@@ -537,7 +537,7 @@ greateq_class.eval = eval_greateq
 
 # Equality
 iseq_class = infix("==", 60)
-def eval_iseq(self):
+def eval_iseq(self, globalenv):
     if self.first.eval() == self.second.eval():
         return True
     else:
@@ -546,7 +546,7 @@ iseq_class.eval = eval_iseq
 
 # Non-equality
 isnoteq_class = infix("!=", 60)
-def eval_isnoteq(self):
+def eval_isnoteq(self, globalenv):
     if self.first.eval() != self.second.eval():
         return True
     else:
@@ -555,31 +555,31 @@ isnoteq_class.eval = eval_isnoteq
 
 # Plus
 plus_class = infix("+", 110)
-def eval_plus(self):
+def eval_plus(self, globalenv):
     return self.first.eval() + self.second.eval()
 plus_class.eval = eval_plus
 
 # Minus
 minus_class = infix("-", 110)
-def eval_minus(self):
+def eval_minus(self, globalenv):
     return self.first.eval() - self.second.eval()
 minus_class.eval = eval_minus
 
 # Multiply
 times_class = infix("*", 120)
-def eval_times(self):
+def eval_times(self, globalenv):
     return self.first.eval() * self.second.eval()
 times_class.eval = eval_times
 
 # Divide
 divide_class = infix("/", 120)
-def eval_divide(self):
+def eval_divide(self, globalenv):
     return self.first.eval() / self.second.eval()
 divide_class.eval = eval_divide
 
 # Modulo
 modulo_class = infix("%", 120)
-def eval_modulo(self):
+def eval_modulo(self, globalenv):
     return self.first.eval() % self.second.eval()
 modulo_class.eval = eval_modulo
 
@@ -606,28 +606,28 @@ def infix_r(ttype, bp):
 
 # Assignment
 equals_class = infix_r("=", 30)
-def eval_equals(self):
+def eval_equals(self, globalenv):
     symbol_table[self.first] = self.second.eval()
     return
 equals_class.eval = eval_equals
 
 # Increment
 increment_class = infix_r("+=", 10)
-def eval_increment(self):
+def eval_increment(self, globalenv):
     symbol_table[self.first.value] = symbol_table[self.first.value] + self.second.eval()    
     return
 increment_class.eval = eval_increment
 
 # Decrement
 decrement_class = infix_r("-=", 10)
-def eval_decrement(self):
+def eval_decrement(self, globalenv):
     symbol_table[self.first] = self.first - self.second.eval()    
     return
 decrement_class.eval = eval_decrement
 
 # Boolean 'or'
 boolor_class = infix_r("||", 30)
-def eval_boolor(self):
+def eval_boolor(self, globalenv):
     if self.first.eval() or self.second.eval():
         return True
     else:
@@ -636,7 +636,7 @@ boolor_class.eval = eval_boolor
 
 # Boolean 'and'
 booland_class = infix_r("&&", 40)
-def eval_booland(self):
+def eval_booland(self, globalenv):
     if self.first.eval() and self.second.eval():
         return True
     else:
@@ -645,7 +645,7 @@ booland_class.eval = eval_booland
 
 # Exponent 
 power_class = infix_r("**", 140)
-def eval_power(self):
+def eval_power(self, globalenv):
     return self.first.eval() ** self.second.eval()
 power_class.eval = eval_power
 
@@ -676,10 +676,11 @@ def leftd(self, left):
     advance(")")
     return self
 @method(symbol("("))
-def eval(self):
-    pass
-
-
+def eval(self, globalenv):
+    print "WHY ARE WE NOT EVALLING THIS FUNCTION CALL\n"
+    symbol_table[self.value] = symbol_table.get(self.value, None)
+    print "FN CALL SELF.FIRST: ", self.first
+    print "FN CALL SELF.SECOND: ", self.second
 
 
 # Dot notation (access struct members) 
@@ -692,10 +693,12 @@ def leftd(self, left):
         advance()
         self.third = parse_expression()
     advance()
+    print "STRUCT FIRST & SECOND", self.first, self.second
     return self
 @method(symbol("."))
-def eval(self):
-    return self.first[self.second]
+def eval(self, globalenv):
+    array = symbol_table[self.first.value]
+    return array[self.second] 
 
 
 # Lists 
@@ -715,16 +718,19 @@ def nulld(self):
         self.first.append(token)
     if token.value == "\n":
         advance()
+    print "THIS SHOULD HAVE PARSED THE ACTUAL LIST", self
     return self
 @method(symbol("["))
 def leftd(self, left):
     self.first = left
     self.second = parse_expression()
     advance("]")
+    print "THIS SHOULD HAVE PARSED THE ARRAY LOOKUP", self
     return self
 @method(symbol("["))
-def eval(self):
-    return self.first[self.second.value]
+def eval(self, globalenv):
+    print "EVAL SELF.FIRST: ", self.first
+    #return self.first[self.second.value]
 
 
 # Structures 
@@ -742,10 +748,13 @@ def nulld(self):
                 advance()
     advance("}")
     self.first = members
+    print "STRUCT FIRST", self.first
     return self
 @method(symbol("{"))
-def eval(self):
-    pass
+def eval(self, globalenv):
+    for each in self.first:
+        each.eval()
+    return self
 
 
 # Helper method for statements
@@ -766,14 +775,15 @@ statement("continue", 0)
 
 # Return
 return_class = statement("return", 0)
-def eval_return(self):
+def eval_return(self, globalenv):
     return self.first.eval()
 return_class.eval = eval_return
 
 
 # Print
 print_class = statement("print", 0)
-def eval_print(self):
+def eval_print(self, globalenv):
+    print "HERE IS WHAT IS PRINTING", self.first.eval()
     print self.first.eval()
 print_class.eval = eval_print
 
@@ -804,9 +814,9 @@ def stmtd(self):
         self.third = parse_expression()
     return self    
 @method(symbol("var"))
-def eval(self):
+def eval(self, globalenv):
     if hasattr(self, "third"):
-        symbol_table[self.first] = self.third.eval()
+        symbol_table[self.first] = self.third
     return self 
 
 
@@ -831,7 +841,7 @@ def stmtd(self):
     advance("}")
     return self
 @method(symbol("while"))
-def eval(self):
+def eval(self, globalenv):
     while self.first.eval() == True:
         for each in self.second:
             each.eval()
@@ -867,7 +877,7 @@ def stmtd(self):
     advance("}")
     return self
 @method(symbol("for"))
-def eval(self):
+def eval(self, globalenv):
     self.first[0].eval()
     while self.first[1].eval() == True:
         for each in self.second:
@@ -941,7 +951,7 @@ def stmtd(self):
         self.third = parse_expression()
     return self
 @method(symbol("elsif"))
-def eval(self):
+def eval(self, globalenv):
     if self.first.eval() == True:
         return self.second.eval()
     else:
@@ -965,18 +975,16 @@ def stmtd(self):
     self.first = expressions
     return self
 @method(symbol("else"))
-def eval(self):
+def eval(self, globalenv):
     for each in self.first:
         each.eval()
-    #return self.first.eval()
-    
+ 
 
 # Function declarations with "def"
 @method(symbol("def"))
 def stmtd(self):
-    #globalenv[token.value] = None   # = self  # add function name to symbol_table?
-    self.first = token.value  # store function name as first child node
-    symbol_table[token.value] = None 
+    self.first = token.value
+    globalenv[token.value] = None   # store function name in global env
     advance("ID")
     arguments = []
     advance("(")
@@ -988,24 +996,24 @@ def stmtd(self):
             if token.value != ",":
                 break
             advance(",")
-    self.second = arguments
+    self.second = []
+    self.second.append(arguments)
     advance(")")
     advance("{")
-    expressions = []
+    definition = []
     if token.value != "}":
         while True:
             expression = parse_expression()
-            expressions.append(expression)
+            definition.append(expression)
             if token.value == "}":
                 break 
-    self.third = expressions
+    self.second.append(definition)  # append args, def as single node
     advance("}")
-    #globalenv[token.value] = self
     return self
 @method(symbol("def"))
-def eval(self):
-    symbol_table[token.value] = self.third
-    pass
+def eval(self, globalenv):
+    globalenv[self.first] = self.second
+    return globalenv[self.first]
 
 
 def main():
@@ -1013,7 +1021,7 @@ def main():
     start_lex(filename)
     p = Program() 
     p.stmtd()
-    result = p.eval()
+    p.eval(globalenv)  # pass in empty global env dictionary
 
 if __name__ == "__main__":
     main()
