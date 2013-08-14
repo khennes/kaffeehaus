@@ -332,7 +332,6 @@ class BaseSymbol:
 
 #############################################
 ############## SYMBOL FACTORY ###############
-#### Create new symbol classes as needed ####
 #############################################
 
 def symbol(ttype, bp=0):
@@ -355,7 +354,6 @@ def symbol(ttype, bp=0):
 symbol("ID").nulld = lambda self: self
 ID_class = symbol("ID")
 def eval_id(self, globalenv):
-    globalenv[self.value] = globalenv.get(self.value, None)
     return globalenv[self.value]
 def emit_id(self):
     print self.value
@@ -463,9 +461,8 @@ def prefix(ttype, bp):
         self.first = parse_expression(bp)   # bp = rbp
         self.second = None
         return self
-    #def eval(self, env=None):
-    #    return eval("%r %s" % (ttype, self.first))
-    #    pass
+    def eval(self, env=None):
+        pass
     sym = symbol(ttype)
     sym.nulld = nulld           # attach nulld, eval methods to symbol,
     sym.eval = eval             # add to symbol_table
@@ -488,9 +485,8 @@ def infix(ttype, bp):
         self.first = left
         self.second = parse_expression(bp)
         return self
-    #def eval(self):
-    #    return eval("%s %s %s" % (self.first, ttype, self.second))
-    #    pass
+    def eval(self):
+        pass
     sym = symbol(ttype, bp)
     sym.leftd = leftd
     sym.eval = eval 
@@ -593,9 +589,8 @@ def infix_r(ttype, bp):
         self.first = left
         self.second = parse_expression(bp-1)
         return self
-    #def eval(self):
-        # return _eval("%s %s %s" % (self.first, ttype, self.second))
-    #    pass
+    def eval(self):
+        pass
     sym = symbol(ttype, bp)
     sym.leftd = leftd
     sym.eval = eval
@@ -677,10 +672,16 @@ def leftd(self, left):
     return self
 @method(symbol("("))
 def eval(self, globalenv):
-    print "WHY ARE WE NOT EVALLING THIS FUNCTION CALL\n"
-    globalenv[self.value] = globalenv.get(self.value, None)
-    print "FN CALL SELF.FIRST: ", self.first
-    print "FN CALL SELF.SECOND: ", self.second
+    arglist = globalenv[self.first.value][0]
+    zipped = zip(arglist, self.second)
+    pass_args = [] 
+    for pair in zipped:
+        pass_args.append(pair[1])
+    globalenv[self.first.value][0] = pass_args
+    # globalenv[self.first.value] == self.first.eval(globalenv)
+    return globalenv[self.first.value][1].eval(globalenv)
+    #for expr in globalenv[self.first.value][1]:
+    #    print expr
 
 
 # Dot notation (access struct members) 
@@ -693,12 +694,14 @@ def leftd(self, left):
         advance()
         self.third = parse_expression()
     advance()
-    print "STRUCT FIRST & SECOND", self.first, self.second
     return self
 @method(symbol("."))
 def eval(self, globalenv):
-    array = globalenv[self.first.value]
-    return array[self.second] 
+    #array = globalenv[self.first.value]
+    #item = self.second
+    #print array[self.second]
+    #return array[self.second] 
+    pass
 
 
 # Lists 
@@ -714,47 +717,36 @@ def nulld(self):
                 break
             advance(",")
     advance("]")
-    if token.ttype == "ID":  # why is this here?
-        self.first.append(token)
-    if token.value == "\n":
-        advance()
-    print "THIS SHOULD HAVE PARSED THE ACTUAL LIST", self
+    print "PARSE THE ACTUAL LIST", self
     return self
+
 @method(symbol("["))
 def leftd(self, left):
     self.first = left
     self.second = parse_expression()
     advance("]")
-    print "THIS SHOULD HAVE PARSED THE ARRAY LOOKUP", self
-    return self
-@method(symbol("["))
-def eval(self, globalenv):
-    print "EVAL SELF.FIRST: ", self.first
-    #return self.first[self.second.value]
+    print "PARSE THE LIST LOOKUP", self
+    return self  # return a lookup node - need a new class
 
 
 # Structures 
 @method(symbol("{"))
 def nulld(self):
-    members = []
+    statements = []
     if token.value != "}":
         while True:
             if token.value == "}":
                 break
-            members.append(parse_expression())
+            statements.append(parse_expression())
             if token.value == ",":
                 advance()
-            if token.value == "\n":
-                advance()
     advance("}")
-    self.first = members
-    print "STRUCT FIRST", self.first
+    self.first = statements 
     return self
 @method(symbol("{"))
 def eval(self, globalenv):
     for each in self.first:
         each.eval(globalenv)
-    return self
 
 
 # Helper method for statements
@@ -783,7 +775,6 @@ return_class.eval = eval_return
 # Print
 print_class = statement("print", 0)
 def eval_print(self, globalenv):
-    print "HERE IS WHAT IS PRINTING", self.first.eval(globalenv)
     print self.first.eval(globalenv)
 print_class.eval = eval_print
 
@@ -791,14 +782,12 @@ print_class.eval = eval_print
 # Variable declarations, with checks for arrays and structures
 @method(symbol("var"))
 def stmtd(self):
-    # Store new var name as first child node of var and register to symbol table
     self.first = token.value
-    globalenv[token.value] = None 
-
+    globalenv[self.first] = None
     advance("ID")
     if not token.ttype in [ 'ID', 'INT', 'FLOAT', 'CHAR', 'BOOL', 'STRUCT', 'LBRACK' ]:
         raise SyntaxError("Expected variable type.")
-    if token.value == "[":      # check if array
+    if token.value == "[":      # check if array type annotation
         advance()
         type = []
         type.append(token)      # array size
@@ -816,10 +805,8 @@ def stmtd(self):
 @method(symbol("var"))
 def eval(self, globalenv):
     if hasattr(self, "third"):
-        globalenv[self.first] = self.third
-    else:
-        globalenv[self.first] = None
-    return globalenv 
+        globalenv[self.first] = self.third.eval(globalenv)
+    return globalenv[self.first]
 
 
 # While-loop statements
@@ -828,25 +815,15 @@ def stmtd(self):
     advance("(")
     self.first = parse_expression()
     advance(")")
-    advance("{")
-    if token.value == "\n":
-        advance()
-    expressions = []
-    if token.value != "}":
-        while True:
-            expressions.append(parse_expression())
-            if token.value == "\n":
-                advance()
-            if token.value == "}":
-                break
+    if token.value != "{":
+        raise SyntaxError("Expected a block.")
+    expressions = parse_expression()
     self.second = expressions
-    advance("}")
     return self
 @method(symbol("while"))
 def eval(self, globalenv):
     while self.first.eval(globalenv) == True:
-        for each in self.second:
-            each.eval(globalenv)
+        self.second.eval(globalenv)
         if self.first.eval(globalenv) == False:
             break
 
@@ -865,25 +842,16 @@ def stmtd(self):
                 break
     advance(")")
     self.first = conditions
-    advance("{")
-    expressions = []
-    if token.value != "}":
-        while True:
-            expressions.append(parse_expression())
-            if token.value == "\n":
-                advance()
-            if token.value == "}":
-                break
+    if token.value != "{":
+        raise SyntaxError("Expected a block.")
+    expressions = parse_expression()
     self.second = expressions
-    advance()
-    advance("}")
     return self
 @method(symbol("for"))
 def eval(self, globalenv):
     self.first[0].eval(globalenv)
     while self.first[1].eval(globalenv) == True:
-        for each in self.second:
-            each.eval(globalenv)
+        self.second.eval(globalenv)
         self.first[2].eval(globalenv)
         if self.first[1].eval(globalenv) == False:
             break
@@ -895,21 +863,12 @@ def stmtd(self):
     advance("(")
     self.first = parse_expression()  # predicate 
     advance(")")
-    advance("{")
-    if token.value == "\n":
-        advance()
+    if token.value != "{":
+        raise SyntaxError("Expected a block.")
     
     # list of expressions to execute if condition is True
-    expressions = []
-    if token.value != "}":
-        while True:
-            expressions.append(parse_expression())
-            if token.value == "\n":
-                advance()
-            if token.value == "}":
-                break
+    expressions = parse_expression()
     self.second = expressions
-    advance("}")
 
     # check for optional ternary operator
     if token.value == "elsif":
@@ -918,7 +877,7 @@ def stmtd(self):
         self.third = parse_expression()
     return self
 @method(symbol("if"))
-def eval(self):
+def eval(self, globalenv):
     if self.first.eval(globalenv) == True:
         return self.second.eval(globalenv)
     else:
@@ -930,21 +889,12 @@ def stmtd(self):
     advance("(")
     self.first = parse_expression()  # predicate 
     advance(")")
-    advance("{")
-    if token.value == "\n":
-        advance()
-
+    if token.value != "{":
+        raise SyntaxError("Expected a block.")
+    
     # list of expressions to execute if condition is True
-    expressions = []
-    if token.value != "}":
-        while True:
-            expressions.append(parse_expression())
-            if token.value == "\n":
-                advance()
-            if token.value == "}":
-                break
+    expressions = parse_expression()
     self.second = expressions
-    advance("}")
 
     # check for optional ternary operator
     if token.value == "elsif":
@@ -962,31 +912,18 @@ def eval(self, globalenv):
 
 @method(symbol("else"))
 def stmtd(self):
-    advance("{")
-    if token.value == "\n":
-        advance()
-    expressions = []
-    if token.value != "}":
-        while True:
-            expressions.append(parse_expression())
-            if token.value == "\n":
-                advance()
-            if token.value == "}":
-                break
-    advance("}")
+    expressions = parse_expression()
     self.first = expressions
     return self
 @method(symbol("else"))
 def eval(self, globalenv):
-    for each in self.first:
-        each.eval(globalenv)
- 
+    return self.first.eval(globalenv) 
+
 
 # Function declarations with "def"
 @method(symbol("def"))
 def stmtd(self):
     self.first = token.value
-    globalenv[token.value] = None   # store function name in global env
     advance("ID")
     arguments = []
     advance("(")
@@ -998,24 +935,20 @@ def stmtd(self):
             if token.value != ",":
                 break
             advance(",")
-    self.second = []
-    self.second.append(arguments)
+    self.second = arguments
     advance(")")
-    advance("{")
-    definition = []
-    if token.value != "}":
-        while True:
-            expression = parse_expression()
-            definition.append(expression)
-            if token.value == "}":
-                break 
-    self.second.append(definition)  # append args, def as single node
-    advance("}")
+#    brace = advance("{")
+#    blocknode = brace.stmd()
+#    self.third = blocknode
+    if token.value != "{":
+        raise SyntaxError("Expected block.")
+    self.third = parse_expression()
     return self
 @method(symbol("def"))
 def eval(self, globalenv):
     globalenv[self.first] = self.second
-    return globalenv[self.first]
+    for each in self.third:
+        each.eval(globalenv)
 
 
 def main():
