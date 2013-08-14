@@ -245,7 +245,7 @@ class Program(object):
 
     def eval(self, env=None):
         for line in self.lines:
-            result = line.eval()  # pass in globalenv here?
+            result = line.eval(globalenv)  # pass in globalenv here?
 
 ##########################
 ######## ADVANCE #########
@@ -355,8 +355,8 @@ def symbol(ttype, bp=0):
 symbol("ID").nulld = lambda self: self
 ID_class = symbol("ID")
 def eval_id(self, globalenv):
-    symbol_table[self.value] = symbol_table.get(self.value, None)
-    return symbol_table[self.value]
+    globalenv[self.value] = globalenv.get(self.value, None)
+    return globalenv[self.value]
 def emit_id(self):
     print self.value
 ID_class.eval = eval_id
@@ -475,7 +475,7 @@ def prefix(ttype, bp):
 # prefix("!", 20)
 negative_class = prefix("-", 130)
 def eval_negative(self, globalenv):
-    return -(self.first.eval())
+    return -(self.first.eval(globalenv))
 negative_class.eval = eval_negative
 
 
@@ -502,7 +502,7 @@ def infix(ttype, bp):
 # Less than
 lesser_class = infix("<", 60)
 def eval_lesser(self, globalenv):
-    if self.first.eval() < self.second.eval():
+    if self.first.eval(globalenv) < self.second.eval(globalenv):
         return True
     else:
         return False
@@ -511,7 +511,7 @@ lesser_class.eval = eval_lesser
 # Less than or equal
 lesseq_class = infix("<=", 60)
 def eval_lesseq(self, globalenv):
-    if self.first.eval() <= self.second.eval():
+    if self.first.eval(globalenv) <= self.second.eval(globalenv):
         return True
     else:
         return False
@@ -520,7 +520,7 @@ lesseq_class.eval = eval_lesseq
 # Greater than
 greater_class = infix(">", 60)
 def eval_greater(self, globalenv):
-    if self.first.eval() > self.second.eval():
+    if self.first.eval(globalenv) > self.second.eval(globalenv):
         return True
     else:
         return False
@@ -529,7 +529,7 @@ greater_class.eval = eval_greater
 # Greater than or equal
 greateq_class = infix(">=", 60)
 def eval_greateq(self, globalenv):
-    if self.first.eval() >= self.second.eval():
+    if self.first.eval(globalenv) >= self.second.eval(globalenv):
         return True
     else:
         return False
@@ -538,7 +538,7 @@ greateq_class.eval = eval_greateq
 # Equality
 iseq_class = infix("==", 60)
 def eval_iseq(self, globalenv):
-    if self.first.eval() == self.second.eval():
+    if self.first.eval(globalenv) == self.second.eval(globalenv):
         return True
     else:
         return False
@@ -547,7 +547,7 @@ iseq_class.eval = eval_iseq
 # Non-equality
 isnoteq_class = infix("!=", 60)
 def eval_isnoteq(self, globalenv):
-    if self.first.eval() != self.second.eval():
+    if self.first.eval(globalenv) != self.second.eval(globalenv):
         return True
     else:
         return False
@@ -556,31 +556,31 @@ isnoteq_class.eval = eval_isnoteq
 # Plus
 plus_class = infix("+", 110)
 def eval_plus(self, globalenv):
-    return self.first.eval() + self.second.eval()
+    return self.first.eval(globalenv) + self.second.eval(globalenv)
 plus_class.eval = eval_plus
 
 # Minus
 minus_class = infix("-", 110)
 def eval_minus(self, globalenv):
-    return self.first.eval() - self.second.eval()
+    return self.first.eval(globalenv) - self.second.eval(globalenv)
 minus_class.eval = eval_minus
 
 # Multiply
 times_class = infix("*", 120)
 def eval_times(self, globalenv):
-    return self.first.eval() * self.second.eval()
+    return self.first.eval(globalenv) * self.second.eval(globalenv)
 times_class.eval = eval_times
 
 # Divide
 divide_class = infix("/", 120)
 def eval_divide(self, globalenv):
-    return self.first.eval() / self.second.eval()
+    return self.first.eval(globalenv) / self.second.eval(globalenv)
 divide_class.eval = eval_divide
 
 # Modulo
 modulo_class = infix("%", 120)
 def eval_modulo(self, globalenv):
-    return self.first.eval() % self.second.eval()
+    return self.first.eval(globalenv) % self.second.eval(globalenv)
 modulo_class.eval = eval_modulo
 
 
@@ -602,33 +602,33 @@ def infix_r(ttype, bp):
     return sym
 
 
-# Register symbols & respective eval methods to symbol_table
+# Register symbols & respective eval methods to symbol_table 
 
 # Assignment
 equals_class = infix_r("=", 30)
 def eval_equals(self, globalenv):
-    symbol_table[self.first] = self.second.eval()
+    globalenv[self.first] = self.second.eval(globalenv)
     return
 equals_class.eval = eval_equals
 
 # Increment
 increment_class = infix_r("+=", 10)
 def eval_increment(self, globalenv):
-    symbol_table[self.first.value] = symbol_table[self.first.value] + self.second.eval()    
+    globalenv[self.first.value] = globalenv[self.first.value] + self.second.eval(globalenv)    
     return
 increment_class.eval = eval_increment
 
 # Decrement
 decrement_class = infix_r("-=", 10)
 def eval_decrement(self, globalenv):
-    symbol_table[self.first] = self.first - self.second.eval()    
+    globalenv[self.first] = self.first - self.second.eval(globalenv)    
     return
 decrement_class.eval = eval_decrement
 
 # Boolean 'or'
 boolor_class = infix_r("||", 30)
 def eval_boolor(self, globalenv):
-    if self.first.eval() or self.second.eval():
+    if self.first.eval(globalenv) or self.second.eval(globalenv):
         return True
     else:
         return False
@@ -637,7 +637,7 @@ boolor_class.eval = eval_boolor
 # Boolean 'and'
 booland_class = infix_r("&&", 40)
 def eval_booland(self, globalenv):
-    if self.first.eval() and self.second.eval():
+    if self.first.eval(globalenv) and self.second.eval(globalenv):
         return True
     else:
         return False
@@ -646,7 +646,7 @@ booland_class.eval = eval_booland
 # Exponent 
 power_class = infix_r("**", 140)
 def eval_power(self, globalenv):
-    return self.first.eval() ** self.second.eval()
+    return self.first.eval(globalenv) ** self.second.eval(globalenv)
 power_class.eval = eval_power
 
 
@@ -678,7 +678,7 @@ def leftd(self, left):
 @method(symbol("("))
 def eval(self, globalenv):
     print "WHY ARE WE NOT EVALLING THIS FUNCTION CALL\n"
-    symbol_table[self.value] = symbol_table.get(self.value, None)
+    globalenv[self.value] = globalenv.get(self.value, None)
     print "FN CALL SELF.FIRST: ", self.first
     print "FN CALL SELF.SECOND: ", self.second
 
@@ -697,7 +697,7 @@ def leftd(self, left):
     return self
 @method(symbol("."))
 def eval(self, globalenv):
-    array = symbol_table[self.first.value]
+    array = globalenv[self.first.value]
     return array[self.second] 
 
 
@@ -753,7 +753,7 @@ def nulld(self):
 @method(symbol("{"))
 def eval(self, globalenv):
     for each in self.first:
-        each.eval()
+        each.eval(globalenv)
     return self
 
 
@@ -776,15 +776,15 @@ statement("continue", 0)
 # Return
 return_class = statement("return", 0)
 def eval_return(self, globalenv):
-    return self.first.eval()
+    return self.first.eval(globalenv)
 return_class.eval = eval_return
 
 
 # Print
 print_class = statement("print", 0)
 def eval_print(self, globalenv):
-    print "HERE IS WHAT IS PRINTING", self.first.eval()
-    print self.first.eval()
+    print "HERE IS WHAT IS PRINTING", self.first.eval(globalenv)
+    print self.first.eval(globalenv)
 print_class.eval = eval_print
 
 
@@ -793,7 +793,7 @@ print_class.eval = eval_print
 def stmtd(self):
     # Store new var name as first child node of var and register to symbol table
     self.first = token.value
-    symbol_table[token.value] = None 
+    globalenv[token.value] = None 
 
     advance("ID")
     if not token.ttype in [ 'ID', 'INT', 'FLOAT', 'CHAR', 'BOOL', 'STRUCT', 'LBRACK' ]:
@@ -816,8 +816,10 @@ def stmtd(self):
 @method(symbol("var"))
 def eval(self, globalenv):
     if hasattr(self, "third"):
-        symbol_table[self.first] = self.third
-    return self 
+        globalenv[self.first] = self.third
+    else:
+        globalenv[self.first] = None
+    return globalenv 
 
 
 # While-loop statements
@@ -842,10 +844,10 @@ def stmtd(self):
     return self
 @method(symbol("while"))
 def eval(self, globalenv):
-    while self.first.eval() == True:
+    while self.first.eval(globalenv) == True:
         for each in self.second:
-            each.eval()
-        if self.first.eval() == False:
+            each.eval(globalenv)
+        if self.first.eval(globalenv) == False:
             break
 
 
@@ -878,12 +880,12 @@ def stmtd(self):
     return self
 @method(symbol("for"))
 def eval(self, globalenv):
-    self.first[0].eval()
-    while self.first[1].eval() == True:
+    self.first[0].eval(globalenv)
+    while self.first[1].eval(globalenv) == True:
         for each in self.second:
-            each.eval()
-        self.first[2].eval()
-        if self.first[1].eval() == False:
+            each.eval(globalenv)
+        self.first[2].eval(globalenv)
+        if self.first[1].eval(globalenv) == False:
             break
 
             
@@ -917,10 +919,10 @@ def stmtd(self):
     return self
 @method(symbol("if"))
 def eval(self):
-    if self.first.eval() == True:
-        return self.second.eval()
+    if self.first.eval(globalenv) == True:
+        return self.second.eval(globalenv)
     else:
-        return self.third.eval()
+        return self.third.eval(globalenv)
 
 
 @method(symbol("elsif"))
@@ -952,10 +954,10 @@ def stmtd(self):
     return self
 @method(symbol("elsif"))
 def eval(self, globalenv):
-    if self.first.eval() == True:
-        return self.second.eval()
+    if self.first.eval(globalenv) == True:
+        return self.second.eval(globalenv)
     else:
-        return self.third.eval()
+        return self.third.eval(globalenv)
 
 
 @method(symbol("else"))
@@ -977,7 +979,7 @@ def stmtd(self):
 @method(symbol("else"))
 def eval(self, globalenv):
     for each in self.first:
-        each.eval()
+        each.eval(globalenv)
  
 
 # Function declarations with "def"
