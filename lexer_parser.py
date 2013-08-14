@@ -355,63 +355,93 @@ def symbol(ttype, bp=0):
 symbol("ID").nulld = lambda self: self
 ID_class = symbol("ID")
 def eval_id(self):
-    symbol_table[token.value] = symbol_table.get(token.value, None)
-    return symbol_table[token.value]
+    symbol_table[self.value] = symbol_table.get(self.value, None)
+    return symbol_table[self.value]
+def emit_id(self):
+    print self.value
 ID_class.eval = eval_id
+ID_class.emit = emit_id
 
 symbol("NUMBER").nulld = lambda self: self
 num_class = symbol("NUMBER")
 def eval_num(self):
     return self.value 
+def emit_num(self):
+    print self.value
 num_class.eval = eval_num
+num_class.emit = emit_num
 
 symbol("STRING").nulld = lambda self: self
 string_class = symbol("STRING")
 def eval_string(self):
-    return self.value
+    return self.value[1:-1]  # print out sans quotes
+def emit_string(self):
+    print self.value
 string_class.eval = eval_string
+string_class.emit = emit_string
 
 symbol("true").nulld = lambda self: self
 true_class = symbol("true")
 def eval_true(self):
     return True 
+def emit_true(self):
+    print self.value
 true_class.eval = eval_true
+true_class.emit = emit_true
 
 symbol("false").nulld = lambda self: self
 false_class = symbol("false")
 def eval_false(self):
     return False 
+def emit_false(self):
+    print self.value
 false_class.eval = eval_false
+false_class.emit = emit_false
 
 symbol("none").nulld = lambda self: self
 none_class = symbol("none")
 def eval_none(self):
     return None 
+def emit_none(self):
+    print self.value
 none_class.eval = eval_none
+none_class.emit = emit_none
 
 symbol("int").nulld = lambda self: self
 int_class = symbol("int")
 def eval_int(self):
     pass
+def emit_int(self):
+    print self.value
 int_class.eval = eval_int
+int_class.emit = emit_int 
 
 symbol("bool").nulld = lambda self: self
 bool_class = symbol("bool")
 def eval_bool(self):
     pass
+def emit_bool(self):
+    print self.value
 bool_class.eval = eval_bool
+bool_class.emit = emit_bool
 
 symbol("float").nulld = lambda self: self
 float_class = symbol("float")
 def eval_float(self):
     pass
+def emit_float(self):
+    print self.value
 float_class.eval = eval_float
+float_class.emit = emit_float
 
 symbol("struct").nulld = lambda self: self
 struct_class = symbol("struct")
 def eval_struct(self):
     pass
+def emit_struct(self):
+    print self.value
 struct_class.eval = eval_struct 
+struct_class.emit = emit_struct
 
 symbol(")")
 symbol(",")
@@ -650,31 +680,22 @@ def eval(self):
     pass
 
 
-# Access list items 
-@method(symbol("["))
-def leftd(self, left):
-    self.first = left
-    self.second = parse_expression()
-    advance("]")
-    return self
-@method(symbol("["))
-def eval(self):
-    pass
 
 
 # Dot notation (access struct members) 
 @method(symbol("."))
 def leftd(self, left):
     self.first = left
-    self.second = token  # should 1st and 2nd be together?
+    self.second = token.value
     advance("ID")
-    advance("=")
-    self.third = parse_expression()
+    if token.value == "=":
+        advance()
+        self.third = parse_expression()
     advance()
     return self
 @method(symbol("."))
 def eval(self):
-    pass
+    return self.first[self.second]
 
 
 # Lists 
@@ -690,14 +711,20 @@ def nulld(self):
                 break
             advance(",")
     advance("]")
-    if token.ttype == "ID":
+    if token.ttype == "ID":  # why is this here?
         self.first.append(token)
     if token.value == "\n":
         advance()
     return self
 @method(symbol("["))
+def leftd(self, left):
+    self.first = left
+    self.second = parse_expression()
+    advance("]")
+    return self
+@method(symbol("["))
 def eval(self):
-    pass
+    return self.first[self.second.value]
 
 
 # Structures 
@@ -727,9 +754,6 @@ def statement(ttype, bp):
         self.first = parse_expression() 
         self.second = None 
         return self
-    #def eval(self):
-        # return eval("%s %s" % (ttype, self.first))
-    #    pass
     sym = symbol(ttype, bp)
     sym.stmtd = stmtd
     sym.eval = eval
@@ -757,21 +781,21 @@ print_class.eval = eval_print
 # Variable declarations, with checks for arrays and structures
 @method(symbol("var"))
 def stmtd(self):
-    # Store new var name as firt child node of var and register to symbol table
+    # Store new var name as first child node of var and register to symbol table
     self.first = token.value
     symbol_table[token.value] = None 
 
     advance("ID")
     if not token.ttype in [ 'ID', 'INT', 'FLOAT', 'CHAR', 'BOOL', 'STRUCT', 'LBRACK' ]:
         raise SyntaxError("Expected variable type.")
-    if token.value == "[":  # check if array
+    if token.value == "[":      # check if array
         advance()
         type = []
-        type.append(token)  # array size
+        type.append(token)      # array size
         advance("NUMBER")
         advance("]")
         type.append(token.value)  # array type
-        self.second = type  # for arrays, type = '[size]type'
+        self.second = type      # for arrays, type = '[size]type'
     else:
         self.second = token.value  # variable type
     advance()
@@ -782,8 +806,8 @@ def stmtd(self):
 @method(symbol("var"))
 def eval(self):
     if hasattr(self, "third"):
-        symbol_table[token.value] = self.third.eval()
-    pass
+        symbol_table[self.first] = self.third.eval()
+    return self 
 
 
 # While-loop statements
@@ -844,7 +868,13 @@ def stmtd(self):
     return self
 @method(symbol("for"))
 def eval(self):
-    pass
+    self.first[0].eval()
+    while self.first[1].eval() == True:
+        for each in self.second:
+            each.eval()
+        self.first[2].eval()
+        if self.first[1].eval() == False:
+            break
 
             
 # If/elsif/else conditional statements 
@@ -936,7 +966,9 @@ def stmtd(self):
     return self
 @method(symbol("else"))
 def eval(self):
-    return self.first.eval()
+    for each in self.first:
+        each.eval()
+    #return self.first.eval()
     
 
 # Function declarations with "def"
