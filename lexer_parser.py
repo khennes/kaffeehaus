@@ -17,7 +17,7 @@ token = None        # contains current token object
 symbol_table = {}   # store instantiated symbol classes
 token_stack = []    # contains remaining tokens
 function_defs = {}  # map fn names to their code objects (for compiling)
-env = {}      # store declared variables in separate table
+env = {}            # store declared variables in separate table
 
 
 #############################
@@ -282,7 +282,7 @@ def parse_expression(rbp=0):
         left = t.stmtd()
     elif hasattr(t, "nulld"):
         left = t.nulld()
-        while rbp < token.leftbp:  # keep going till rbp > current token's bp
+        while rbp < token.leftbp:  # keep going till rbp >= current token's bp
             t = token
             advance()
             left = t.leftd(left)
@@ -294,8 +294,7 @@ def parse_expression(rbp=0):
 # Parse a single statement
 def parse_statement():
     global token
-    t = token
-    return t.stmtd()
+    return token.stmtd()
 
 
 ##################################
@@ -324,7 +323,7 @@ class BaseSymbol:
     # output Py string representation of abstract syntax tree (AST)
     def __repr__(self):
         if self.ttype in [ 'ID', 'STRING', 'NUMBER' ]:
-            return "%s" % self.value                # changed from (%s %s)
+            return "%s" % self.value  # changed from (%s %s)
         out = [self.value, self.first, self.second, self.third]
         out = map(str, filter(None, out))
         return "(" + " ".join(out) + ")"
@@ -354,7 +353,6 @@ def symbol(ttype, bp=0):
 symbol("ID").nulld = lambda self: self
 ID_class = symbol("ID")
 def eval_id(self, env):
-    env[self.value] = env.get(self.value, None)
     return env[self.value]
 def emit_id(self):
     print self.value
@@ -504,6 +502,9 @@ def eval_lesser(self, env):
     else:
         return False
 lesser_class.eval = eval_lesser
+def emit_lesser(self, env):
+    print "<"
+lesser_class.emit = emit_lesser
 
 # Less than or equal
 lesseq_class = infix("<=", 60)
@@ -513,6 +514,9 @@ def eval_lesseq(self, env):
     else:
         return False
 lesseq_class.eval = eval_lesseq
+def emit_lesseq(self, env):
+    print "<="
+lesseq_class.emit = emit_lesseq
 
 # Greater than
 greater_class = infix(">", 60)
@@ -522,6 +526,9 @@ def eval_greater(self, env):
     else:
         return False
 greater_class.eval = eval_greater
+def emit_greater(self, env):
+    print ">"
+greater_class.emit = emit_greater
 
 # Greater than or equal
 greateq_class = infix(">=", 60)
@@ -531,6 +538,9 @@ def eval_greateq(self, env):
     else:
         return False
 greateq_class.eval = eval_greateq
+def emit_greateq(self, env):
+    print ">="
+greateq_class.emit = emit_greateq
 
 # Equality
 iseq_class = infix("==", 60)
@@ -540,6 +550,9 @@ def eval_iseq(self, env):
     else:
         return False
 iseq_class.eval = eval_iseq
+def emit_iseq(self, env):
+    print "=="
+iseq_class.emit = emit_iseq
 
 # Non-equality
 isnoteq_class = infix("!=", 60)
@@ -549,36 +562,54 @@ def eval_isnoteq(self, env):
     else:
         return False
 isnoteq_class.eval = eval_isnoteq
+def emit_isnoteq(self, env):
+    print "!="
+isnoteq_class.emit = emit_isnoteq
 
 # Plus
 plus_class = infix("+", 110)
 def eval_plus(self, env):
     return self.first.eval(env) + self.second.eval(env)
 plus_class.eval = eval_plus
+def emit_plus(self, env):
+    print "+"
+plus_class.emit = emit_plus
 
 # Minus
 minus_class = infix("-", 110)
 def eval_minus(self, env):
     return self.first.eval(env) - self.second.eval(env)
 minus_class.eval = eval_minus
+def emit_minus(self, env):
+    print "-"
+minus_class.emit = emit_minus
 
 # Multiply
 times_class = infix("*", 120)
 def eval_times(self, env):
     return self.first.eval(env) * self.second.eval(env)
 times_class.eval = eval_times
+def emit_times(self, env):
+    print "-"
+times_class.emit = emit_times
 
 # Divide
 divide_class = infix("/", 120)
 def eval_divide(self, env):
     return self.first.eval(env) / self.second.eval(env)
 divide_class.eval = eval_divide
+def emit_divide(self, env):
+    print "/"
+divide_class.emit = emit_divide
 
 # Modulo
 modulo_class = infix("%", 120)
 def eval_modulo(self, env):
     return self.first.eval(env) % self.second.eval(env)
 modulo_class.eval = eval_modulo
+def emit_modulo(self, env):
+    print "%"
+modulo_class.emit = emit_modulo
 
 
 ########################################
@@ -673,11 +704,14 @@ def leftd(self, left):
     return self
 @method(symbol("("))
 def eval(self, env):
-    arglist = env[self.first.value][0]
-    zipped = zip(arglist, self.second)
+    fn = env[self.first.value]  # [arglist], [definition]
+    arglist = []
+    for each in fn[0]:
+        arglist.append(each.value)
+    pass_values = [ item.eval(env) for item in self.second ]
+    zipped = zip(arglist, pass_values)
     env.update(dict(zipped))             # create new var env for life of function
-    env[self.first.value][1].eval(env)
-    print env
+    fn[1].eval(env)
     return env
 
 
@@ -696,7 +730,7 @@ def leftd(self, left):
 def eval(self, env):
     if self.third: 
         env[self.first.value][self.second] = self.third
-    return env[self.first.value][self.second]
+    return env[self.first.value]
 
 
 # Lists 
@@ -755,7 +789,6 @@ def nulld(self):
 def eval(self, env):
     for each in self.first:
         each.eval(env)
-    return env
 
 
 # Helper method for statements
@@ -804,7 +837,7 @@ return_class.eval = eval_return
 # Print
 print_class = statement("print", 0)
 def eval_print(self, env):
-    print self.first.eval(env)
+    print "PRINT:", self.first.eval(env)
 print_class.eval = eval_print
 
 
@@ -833,11 +866,7 @@ def stmtd(self):
     return self    
 @method(symbol("var"))
 def eval(self, env):
-    #if self.second == 'struct':
-    #    self.first = {}
-    #if self.second not in [ 'int', 'float', 'char', 'bool' ]:
-    #    env[self.first] = []
-    if hasattr(self, "third"):
+    if self.third: 
         env[self.first] = self.third.eval(env)
 
 
@@ -978,6 +1007,7 @@ def stmtd(self):
 @method(symbol("def"))
 def eval(self, env):
     env[self.first] = self.second
+    print "self.second", self.second
 
 
 def main():
