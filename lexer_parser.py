@@ -17,7 +17,7 @@ token = None        # contains current token object
 symbol_table = {}   # store instantiated symbol classes
 token_stack = []    # contains remaining tokens
 function_defs = {}  # map fn names to their code objects (for compiling)
-globalenv = {}      # store declared variables in separate table
+env = {}      # store declared variables in separate table
 
 
 #############################
@@ -245,7 +245,7 @@ class Program(object):
 
     def eval(self, env=None):
         for line in self.lines:
-            result = line.eval(globalenv)  # pass in globalenv here?
+            result = line.eval(env)  # pass in env here?
 
 ##########################
 ######## ADVANCE #########
@@ -324,7 +324,7 @@ class BaseSymbol:
     # output Py string representation of abstract syntax tree (AST)
     def __repr__(self):
         if self.ttype in [ 'ID', 'STRING', 'NUMBER' ]:
-            return "(%s %s)" % (self.ttype, self.value)
+            return "%s" % self.value                # changed from (%s %s)
         out = [self.value, self.first, self.second, self.third]
         out = map(str, filter(None, out))
         return "(" + " ".join(out) + ")"
@@ -353,8 +353,9 @@ def symbol(ttype, bp=0):
 
 symbol("ID").nulld = lambda self: self
 ID_class = symbol("ID")
-def eval_id(self, globalenv):
-    return globalenv[self.value]
+def eval_id(self, env):
+    env[self.value] = env.get(self.value, None)
+    return env[self.value]
 def emit_id(self):
     print self.value
 ID_class.eval = eval_id
@@ -362,7 +363,7 @@ ID_class.emit = emit_id
 
 symbol("NUMBER").nulld = lambda self: self
 num_class = symbol("NUMBER")
-def eval_num(self, globalenv):
+def eval_num(self, env):
     return self.value 
 def emit_num(self):
     print self.value
@@ -371,7 +372,7 @@ num_class.emit = emit_num
 
 symbol("STRING").nulld = lambda self: self
 string_class = symbol("STRING")
-def eval_string(self, globalenv):
+def eval_string(self, env):
     return self.value[1:-1]  # print out sans quotes
 def emit_string(self):
     print self.value
@@ -380,7 +381,7 @@ string_class.emit = emit_string
 
 symbol("true").nulld = lambda self: self
 true_class = symbol("true")
-def eval_true(self, globalenv):
+def eval_true(self, env):
     return True 
 def emit_true(self):
     print self.value
@@ -389,7 +390,7 @@ true_class.emit = emit_true
 
 symbol("false").nulld = lambda self: self
 false_class = symbol("false")
-def eval_false(self, globalenv):
+def eval_false(self, env):
     return False 
 def emit_false(self):
     print self.value
@@ -398,7 +399,7 @@ false_class.emit = emit_false
 
 symbol("none").nulld = lambda self: self
 none_class = symbol("none")
-def eval_none(self, globalenv):
+def eval_none(self, env):
     return None 
 def emit_none(self):
     print self.value
@@ -407,7 +408,7 @@ none_class.emit = emit_none
 
 symbol("int").nulld = lambda self: self
 int_class = symbol("int")
-def eval_int(self, globalenv):
+def eval_int(self, env):
     pass
 def emit_int(self):
     print self.value
@@ -416,7 +417,7 @@ int_class.emit = emit_int
 
 symbol("bool").nulld = lambda self: self
 bool_class = symbol("bool")
-def eval_bool(self, globalenv):
+def eval_bool(self, env):
     pass
 def emit_bool(self):
     print self.value
@@ -425,7 +426,7 @@ bool_class.emit = emit_bool
 
 symbol("float").nulld = lambda self: self
 float_class = symbol("float")
-def eval_float(self, globalenv):
+def eval_float(self, env):
     pass
 def emit_float(self):
     print self.value
@@ -434,7 +435,7 @@ float_class.emit = emit_float
 
 symbol("struct").nulld = lambda self: self
 struct_class = symbol("struct")
-def eval_struct(self, globalenv):
+def eval_struct(self, env):
     pass
 def emit_struct(self):
     print self.value
@@ -471,8 +472,8 @@ def prefix(ttype, bp):
 # Register operator symbols to symbol_table
 # prefix("!", 20)
 negative_class = prefix("-", 130)
-def eval_negative(self, globalenv):
-    return -(self.first.eval(globalenv))
+def eval_negative(self, env):
+    return -(self.first.eval(env))
 negative_class.eval = eval_negative
 
 
@@ -497,8 +498,8 @@ def infix(ttype, bp):
 
 # Less than
 lesser_class = infix("<", 60)
-def eval_lesser(self, globalenv):
-    if self.first.eval(globalenv) < self.second.eval(globalenv):
+def eval_lesser(self, env):
+    if self.first.eval(env) < self.second.eval(env):
         return True
     else:
         return False
@@ -506,8 +507,8 @@ lesser_class.eval = eval_lesser
 
 # Less than or equal
 lesseq_class = infix("<=", 60)
-def eval_lesseq(self, globalenv):
-    if self.first.eval(globalenv) <= self.second.eval(globalenv):
+def eval_lesseq(self, env):
+    if self.first.eval(env) <= self.second.eval(env):
         return True
     else:
         return False
@@ -515,8 +516,8 @@ lesseq_class.eval = eval_lesseq
 
 # Greater than
 greater_class = infix(">", 60)
-def eval_greater(self, globalenv):
-    if self.first.eval(globalenv) > self.second.eval(globalenv):
+def eval_greater(self, env):
+    if self.first.eval(env) > self.second.eval(env):
         return True
     else:
         return False
@@ -524,8 +525,8 @@ greater_class.eval = eval_greater
 
 # Greater than or equal
 greateq_class = infix(">=", 60)
-def eval_greateq(self, globalenv):
-    if self.first.eval(globalenv) >= self.second.eval(globalenv):
+def eval_greateq(self, env):
+    if self.first.eval(env) >= self.second.eval(env):
         return True
     else:
         return False
@@ -533,8 +534,8 @@ greateq_class.eval = eval_greateq
 
 # Equality
 iseq_class = infix("==", 60)
-def eval_iseq(self, globalenv):
-    if self.first.eval(globalenv) == self.second.eval(globalenv):
+def eval_iseq(self, env):
+    if self.first.eval(env) == self.second.eval(env):
         return True
     else:
         return False
@@ -542,8 +543,8 @@ iseq_class.eval = eval_iseq
 
 # Non-equality
 isnoteq_class = infix("!=", 60)
-def eval_isnoteq(self, globalenv):
-    if self.first.eval(globalenv) != self.second.eval(globalenv):
+def eval_isnoteq(self, env):
+    if self.first.eval(env) != self.second.eval(env):
         return True
     else:
         return False
@@ -551,32 +552,32 @@ isnoteq_class.eval = eval_isnoteq
 
 # Plus
 plus_class = infix("+", 110)
-def eval_plus(self, globalenv):
-    return self.first.eval(globalenv) + self.second.eval(globalenv)
+def eval_plus(self, env):
+    return self.first.eval(env) + self.second.eval(env)
 plus_class.eval = eval_plus
 
 # Minus
 minus_class = infix("-", 110)
-def eval_minus(self, globalenv):
-    return self.first.eval(globalenv) - self.second.eval(globalenv)
+def eval_minus(self, env):
+    return self.first.eval(env) - self.second.eval(env)
 minus_class.eval = eval_minus
 
 # Multiply
 times_class = infix("*", 120)
-def eval_times(self, globalenv):
-    return self.first.eval(globalenv) * self.second.eval(globalenv)
+def eval_times(self, env):
+    return self.first.eval(env) * self.second.eval(env)
 times_class.eval = eval_times
 
 # Divide
 divide_class = infix("/", 120)
-def eval_divide(self, globalenv):
-    return self.first.eval(globalenv) / self.second.eval(globalenv)
+def eval_divide(self, env):
+    return self.first.eval(env) / self.second.eval(env)
 divide_class.eval = eval_divide
 
 # Modulo
 modulo_class = infix("%", 120)
-def eval_modulo(self, globalenv):
-    return self.first.eval(globalenv) % self.second.eval(globalenv)
+def eval_modulo(self, env):
+    return self.first.eval(env) % self.second.eval(env)
 modulo_class.eval = eval_modulo
 
 
@@ -601,29 +602,29 @@ def infix_r(ttype, bp):
 
 # Assignment
 equals_class = infix_r("=", 30)
-def eval_equals(self, globalenv):
-    globalenv[self.first] = self.second.eval(globalenv)
+def eval_equals(self, env):
+    env[self.first] = self.second.eval(env)
     return
 equals_class.eval = eval_equals
 
 # Increment
 increment_class = infix_r("+=", 10)
-def eval_increment(self, globalenv):
-    globalenv[self.first.value] = globalenv[self.first.value] + self.second.eval(globalenv)    
+def eval_increment(self, env):
+    env[self.first.value] = env[self.first.value] + self.second.eval(env)    
     return
 increment_class.eval = eval_increment
 
 # Decrement
 decrement_class = infix_r("-=", 10)
-def eval_decrement(self, globalenv):
-    globalenv[self.first] = self.first - self.second.eval(globalenv)    
+def eval_decrement(self, env):
+    env[self.first] = self.first - self.second.eval(env)    
     return
 decrement_class.eval = eval_decrement
 
 # Boolean 'or'
 boolor_class = infix_r("||", 30)
-def eval_boolor(self, globalenv):
-    if self.first.eval(globalenv) or self.second.eval(globalenv):
+def eval_boolor(self, env):
+    if self.first.eval(env) or self.second.eval(env):
         return True
     else:
         return False
@@ -631,8 +632,8 @@ boolor_class.eval = eval_boolor
 
 # Boolean 'and'
 booland_class = infix_r("&&", 40)
-def eval_booland(self, globalenv):
-    if self.first.eval(globalenv) and self.second.eval(globalenv):
+def eval_booland(self, env):
+    if self.first.eval(env) and self.second.eval(env):
         return True
     else:
         return False
@@ -640,8 +641,8 @@ booland_class.eval = eval_booland
 
 # Exponent 
 power_class = infix_r("**", 140)
-def eval_power(self, globalenv):
-    return self.first.eval(globalenv) ** self.second.eval(globalenv)
+def eval_power(self, env):
+    return self.first.eval(env) ** self.second.eval(env)
 power_class.eval = eval_power
 
 
@@ -671,17 +672,13 @@ def leftd(self, left):
     advance(")")
     return self
 @method(symbol("("))
-def eval(self, globalenv):
-    arglist = globalenv[self.first.value][0]
+def eval(self, env):
+    arglist = env[self.first.value][0]
     zipped = zip(arglist, self.second)
-    pass_args = [] 
-    for pair in zipped:
-        pass_args.append(pair[1])
-    globalenv[self.first.value][0] = pass_args
-    # globalenv[self.first.value] == self.first.eval(globalenv)
-    return globalenv[self.first.value][1].eval(globalenv)
-    #for expr in globalenv[self.first.value][1]:
-    #    print expr
+    env.update(dict(zipped))             # create new var env for life of function
+    env[self.first.value][1].eval(env)
+    print env
+    return env
 
 
 # Dot notation (access struct members) 
@@ -696,17 +693,16 @@ def leftd(self, left):
     advance()
     return self
 @method(symbol("."))
-def eval(self, globalenv):
-    #array = globalenv[self.first.value]
-    #item = self.second
-    #print array[self.second]
-    #return array[self.second] 
-    pass
+def eval(self, env):
+    if self.third: 
+        env[self.first.value][self.second] = self.third
+    return env[self.first.value][self.second]
 
 
 # Lists 
 @method(symbol("["))
 def nulld(self):
+    print "NOW PARSE A LIST"
     self.first = []
     if token.value != "]":
         while True:  # TODO: Add extra 'if' to allow optional trailing commas
@@ -717,19 +713,31 @@ def nulld(self):
                 break
             advance(",")
     advance("]")
-    print "PARSE THE ACTUAL LIST", self
     return self
+@method(symbol("["))
+def eval(self, env):
+    print "THIS IS THE LIST EVAL"
+    print "SELF VALUE", self.value
+    return self.value
+    
 
 @method(symbol("["))
 def leftd(self, left):
+    print "NOW PARSE A LOOKUP"
     self.first = left
     self.second = parse_expression()
     advance("]")
-    print "PARSE THE LIST LOOKUP", self
     return self  # return a lookup node - need a new class
+@method(symbol("["))
+def eval(self, env):
+    print "THIS IS THE LOOKUP EVAL"
+    print "self", self.first
+    array_name = self.first
+    index_pos = self.second
+    return array_name[index_pos]
 
 
-# Structures 
+# Statement blocks
 @method(symbol("{"))
 def nulld(self):
     statements = []
@@ -744,9 +752,10 @@ def nulld(self):
     self.first = statements 
     return self
 @method(symbol("{"))
-def eval(self, globalenv):
+def eval(self, env):
     for each in self.first:
-        each.eval(globalenv)
+        each.eval(env)
+    return env
 
 
 # Helper method for statements
@@ -760,22 +769,42 @@ def statement(ttype, bp):
     sym.eval = eval
     return sym
 
-statement("break", 0)
-statement("get", 20)
-statement("continue", 0)
+
+# Break
+break_class = statement("break", 0)
+def eval_break(self, env):
+    # break
+    pass
+break_class.eval = eval_break
+
+
+# Continue
+continue_class = statement("continue", 0)
+def eval_continue(self, env):
+    # continue
+    pass
+continue_class.eval = eval_continue
+
+
+# Get
+get_class = statement("get", 20)
+def eval_get(self, env):
+    # get input from user
+    pass
+get_class.eval = eval_get
 
 
 # Return
 return_class = statement("return", 0)
-def eval_return(self, globalenv):
-    return self.first.eval(globalenv)
+def eval_return(self, env):
+    return self.first.eval(env)
 return_class.eval = eval_return
 
 
 # Print
 print_class = statement("print", 0)
-def eval_print(self, globalenv):
-    print self.first.eval(globalenv)
+def eval_print(self, env):
+    print self.first.eval(env)
 print_class.eval = eval_print
 
 
@@ -783,7 +812,7 @@ print_class.eval = eval_print
 @method(symbol("var"))
 def stmtd(self):
     self.first = token.value
-    globalenv[self.first] = None
+    env[self.first] = None
     advance("ID")
     if not token.ttype in [ 'ID', 'INT', 'FLOAT', 'CHAR', 'BOOL', 'STRUCT', 'LBRACK' ]:
         raise SyntaxError("Expected variable type.")
@@ -803,10 +832,13 @@ def stmtd(self):
         self.third = parse_expression()
     return self    
 @method(symbol("var"))
-def eval(self, globalenv):
+def eval(self, env):
+    #if self.second == 'struct':
+    #    self.first = {}
+    #if self.second not in [ 'int', 'float', 'char', 'bool' ]:
+    #    env[self.first] = []
     if hasattr(self, "third"):
-        globalenv[self.first] = self.third.eval(globalenv)
-    return globalenv[self.first]
+        env[self.first] = self.third.eval(env)
 
 
 # While-loop statements
@@ -821,10 +853,10 @@ def stmtd(self):
     self.second = expressions
     return self
 @method(symbol("while"))
-def eval(self, globalenv):
-    while self.first.eval(globalenv) == True:
-        self.second.eval(globalenv)
-        if self.first.eval(globalenv) == False:
+def eval(self, env):
+    while self.first.eval(env) == True:
+        self.second.eval(env)
+        if self.first.eval(env) == False:
             break
 
 
@@ -848,12 +880,12 @@ def stmtd(self):
     self.second = expressions
     return self
 @method(symbol("for"))
-def eval(self, globalenv):
-    self.first[0].eval(globalenv)
-    while self.first[1].eval(globalenv) == True:
-        self.second.eval(globalenv)
-        self.first[2].eval(globalenv)
-        if self.first[1].eval(globalenv) == False:
+def eval(self, env):
+    self.first[0].eval(env)
+    while self.first[1].eval(env) == True:
+        self.second.eval(env)
+        self.first[2].eval(env)
+        if self.first[1].eval(env) == False:
             break
 
             
@@ -877,11 +909,11 @@ def stmtd(self):
         self.third = parse_expression()
     return self
 @method(symbol("if"))
-def eval(self, globalenv):
-    if self.first.eval(globalenv) == True:
-        return self.second.eval(globalenv)
+def eval(self, env):
+    if self.first.eval(env) == True:
+        return self.second.eval(env)
     else:
-        return self.third.eval(globalenv)
+        return self.third.eval(env)
 
 
 @method(symbol("elsif"))
@@ -903,11 +935,11 @@ def stmtd(self):
         self.third = parse_expression()
     return self
 @method(symbol("elsif"))
-def eval(self, globalenv):
-    if self.first.eval(globalenv) == True:
-        return self.second.eval(globalenv)
+def eval(self, env):
+    if self.first.eval(env) == True:
+        return self.second.eval(env)
     else:
-        return self.third.eval(globalenv)
+        return self.third.eval(env)
 
 
 @method(symbol("else"))
@@ -916,8 +948,8 @@ def stmtd(self):
     self.first = expressions
     return self
 @method(symbol("else"))
-def eval(self, globalenv):
-    return self.first.eval(globalenv) 
+def eval(self, env):
+    return self.first.eval(env) 
 
 
 # Function declarations with "def"
@@ -925,6 +957,7 @@ def eval(self, globalenv):
 def stmtd(self):
     self.first = token.value
     advance("ID")
+    self.second = []  # store args and definition in right node
     arguments = []
     advance("(")
     if token.value != ")":
@@ -935,20 +968,16 @@ def stmtd(self):
             if token.value != ",":
                 break
             advance(",")
-    self.second = arguments
+    self.second.append(arguments)
     advance(")")
-#    brace = advance("{")
-#    blocknode = brace.stmd()
-#    self.third = blocknode
+#   brace = advance("{")
     if token.value != "{":
         raise SyntaxError("Expected block.")
-    self.third = parse_expression()
+    self.second.append(parse_expression())
     return self
 @method(symbol("def"))
-def eval(self, globalenv):
-    globalenv[self.first] = self.second
-    for each in self.third:
-        each.eval(globalenv)
+def eval(self, env):
+    env[self.first] = self.second
 
 
 def main():
@@ -956,7 +985,7 @@ def main():
     start_lex(filename)
     p = Program() 
     p.stmtd()
-    p.eval(globalenv)  # pass in empty global env dictionary
+    p.eval(env)  # pass in empty global env dictionary
 
 if __name__ == "__main__":
     main()
