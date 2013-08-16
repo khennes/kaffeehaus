@@ -1,0 +1,40 @@
+<!-- Adapted from http://www.github.com/kripken/emscripten/src/compiler.html -->
+
+<DOCTYPE html>
+<html>
+    <head>
+        <title>asm.js | warp-speed compiled Javascript</title>
+        <style>
+
+
+        </style>
+    </head>
+    <body>
+        <h2>Waffle --> Crumpet</h2>
+        <div id="output">
+        <script>
+            arguments = []  // ?
+
+            var outputElement = document.getElementById('output');
+            var compilerOutput = '';
+            print = function(x) {
+                //outputElement.innerHTML += x;
+                compilerOutput += x;
+            };
+
+            // For generated code
+            var Module = {
+                print: function(x) {
+                    outputElement.innerHTML += x;
+                }
+            };
+        </script>
+        <script src="compiler.js">  // in my case, load already-compiled js files
+        </script>
+        <input type="button" value="Make asm.js" onclick="compile(document.getElementById('the_input').value); eval(compilerOutput)">
+
+    </body>
+</html>
+
+
+        </div>
