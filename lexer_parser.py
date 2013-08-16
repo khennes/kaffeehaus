@@ -2,20 +2,25 @@ import sys
 import ply.lex as lex
 import re
 import time
+from header import header  # Header code for top of output JS file
+
 
 """ TODO """
+# globalenv to make recursion possible
 # Implement 'get' (scanf); handle constants; postfix ++ and --
 # BNF grammar!
 # Improve error handling
+# Implement lexical scope for kicks
 # Change advance() to check NEXT (not current) token for value
+# Compile.
 
 
 ### GLOBALS ###
 token = None        # contains current token object
 symbol_table = {}   # store instantiated symbol classes
 token_stack = []    # contains remaining tokens
-function_defs = {}  # map fn names to their code objects (for compiling)
-env = {}            # store declared variables in separate table
+env = {}            # store declared variables for evaluation 
+const_table = {}    # store variables for codegen
 
 
 ######################################
@@ -185,7 +190,9 @@ def t_error(t):
 #######################################
 
 def generate_tokens(program):    
+    print "----------- Begin input program -----------"
     print program
+    print "----------- End input program -----------"
     token_stream = []
     lexer = lex.lex()
     lexer.input(program)
@@ -243,11 +250,24 @@ class Program(object):
 
     def eval(self, env=None):
         for line in self.lines:
-            line.eval(env)  # pass in env here?
+            line.eval(env)
+"""
+    def build_const_table(self):
+        const_table = {}
+        for line in self.lines:
+            if token == "var":
+                const_table[self.first] = # MEMORY LOCATION dependent on data type
+"""
 
-    #def emit(self, c=None):
-    #    for line in self.lines:
-    #    line.emit(c)
+    def constant_fold(self):
+        pass
+
+    def emit(self, c=None):
+        for line in self.lines:
+            code = line.emit()
+            print code
+            jscode.append(code)
+
 
 ######################################
 ############## ADVANCE ###############
@@ -305,7 +325,6 @@ def parse_statement():
 
 class BaseSymbol:
     def __init__(self, ttype, value, lineno, lexpos):
-
         self.ttype = ttype
         self.value = value
         self.lineno = lineno
@@ -356,90 +375,92 @@ symbol("ID").nulld = lambda self: self
 ID_class = symbol("ID")
 def eval_id(self, env):
     return env[self.value]
-def emit_id(self, c):
-    print self.value
 ID_class.eval = eval_id
+def emit_id(self):
+    if "$" in self.value:
+        self.value.replace("$", "")
+    return self.value
 ID_class.emit = emit_id
 
 symbol("NUMBER").nulld = lambda self: self
 num_class = symbol("NUMBER")
 def eval_num(self, env):
     return self.value 
-def emit_num(self, c):
-    print self.value
 num_class.eval = eval_num
+def emit_num(self):
+    return self.value
 num_class.emit = emit_num
 
 symbol("STRING").nulld = lambda self: self
 string_class = symbol("STRING")
 def eval_string(self, env):
     return self.value[1:-1]  # print out sans quotes
-def emit_string(self, c):
-    print self.value
 string_class.eval = eval_string
+def emit_string(self):
+    print self.value
 string_class.emit = emit_string
 
 symbol("true").nulld = lambda self: self
 true_class = symbol("true")
 def eval_true(self, env):
     return True 
-def emit_true(self, c):
-    print self.value
 true_class.eval = eval_true
+def emit_true(self):
+    print self.value
 true_class.emit = emit_true
 
 symbol("false").nulld = lambda self: self
 false_class = symbol("false")
 def eval_false(self, env):
     return False 
-def emit_false(self, c):
-    print self.value
 false_class.eval = eval_false
+def emit_false(self):
+    print self.value
 false_class.emit = emit_false
 
 symbol("none").nulld = lambda self: self
 none_class = symbol("none")
 def eval_none(self, env):
     return None 
-def emit_none(self, c):
-    print self.value
 none_class.eval = eval_none
+def emit_none(self):
+    print self.value
 none_class.emit = emit_none
 
 symbol("int").nulld = lambda self: self
 int_class = symbol("int")
 def eval_int(self, env):
     pass
-def emit_int(self, c):
-    print self.value
 int_class.eval = eval_int
+def emit_int(self):
+    print self.value
 int_class.emit = emit_int 
 
 symbol("bool").nulld = lambda self: self
 bool_class = symbol("bool")
 def eval_bool(self, env):
     pass
-def emit_bool(self, c):
-    print self.value
 bool_class.eval = eval_bool
+def emit_bool(self):
+    print self.value
 bool_class.emit = emit_bool
 
 symbol("float").nulld = lambda self: self
 float_class = symbol("float")
 def eval_float(self, env):
     pass
-def emit_float(self, c):
-    print self.value
 float_class.eval = eval_float
+def emit_float(self):
+    print self.value
 float_class.emit = emit_float
 
 symbol("struct").nulld = lambda self: self
 struct_class = symbol("struct")
 def eval_struct(self, env):
     pass
-def emit_struct(self, c):
-    print self.value
 struct_class.eval = eval_struct 
+def emit_struct(self):
+    print self.value
 struct_class.emit = emit_struct
 
 symbol(")")
@@ -464,7 +485,7 @@ def prefix(ttype, bp):
         return self
     def eval(self, env=None):
         pass
-    def emit(self, c=None):
+    def emit(self):
         pass
     sym = symbol(ttype)
     sym.nulld = nulld           # attach nulld, eval methods to symbol,
@@ -491,7 +512,7 @@ def infix(ttype, bp):
         return self
     def eval(self, env=None):
         pass
-    def emit(self, c=None):
+    def emit(self):
         pass
     sym = symbol(ttype, bp)
     sym.leftd = leftd
@@ -510,7 +531,7 @@ def eval_lesser(self, env):
     else:
         return False
 lesser_class.eval = eval_lesser
-def emit_lesser(self, c):
+def emit_lesser(self):
     print "<"
 lesser_class.emit = emit_lesser
 
@@ -522,7 +543,7 @@ def eval_lesseq(self, env):
     else:
         return False
 lesseq_class.eval = eval_lesseq
-def emit_lesseq(self, c):
+def emit_lesseq(self):
     print "<="
 lesseq_class.emit = emit_lesseq
 
@@ -534,7 +555,7 @@ def eval_greater(self, env):
     else:
         return False
 greater_class.eval = eval_greater
-def emit_greater(self, c):
+def emit_greater(self):
     print ">"
 greater_class.emit = emit_greater
 
@@ -546,7 +567,7 @@ def eval_greateq(self, env):
     else:
         return False
 greateq_class.eval = eval_greateq
-def emit_greateq(self, c):
+def emit_greateq(self):
     print ">="
 greateq_class.emit = emit_greateq
 
@@ -558,7 +579,7 @@ def eval_iseq(self, env):
     else:
         return False
 iseq_class.eval = eval_iseq
-def emit_iseq(self, c):
+def emit_iseq(self):
     print "=="
 iseq_class.emit = emit_iseq
 
@@ -570,7 +591,7 @@ def eval_isnoteq(self, env):
     else:
         return False
 isnoteq_class.eval = eval_isnoteq
-def emit_isnoteq(self, c):
+def emit_isnoteq(self):
     print "!="
 isnoteq_class.emit = emit_isnoteq
 
@@ -579,8 +600,8 @@ plus_class = infix("+", 110)
 def eval_plus(self, env):
     return self.first.eval(env) + self.second.eval(env)
 plus_class.eval = eval_plus
-def emit_plus(self, c):
-    print "+"
+def emit_plus(self):
+    return "%s + %s" % (self.first.emit(), self.second.emit())
 plus_class.emit = emit_plus
 
 # Minus
@@ -588,8 +609,8 @@ minus_class = infix("-", 110)
 def eval_minus(self, env):
     return self.first.eval(env) - self.second.eval(env)
 minus_class.eval = eval_minus
-def emit_minus(self, c):
-    print "-"
+def emit_minus(self):
+    return "%s - %s" % (self.first.emit(), self.second.emit())
 minus_class.emit = emit_minus
 
 # Multiply
@@ -597,8 +618,8 @@ times_class = infix("*", 120)
 def eval_times(self, env):
     return self.first.eval(env) * self.second.eval(env)
 times_class.eval = eval_times
-def emit_times(self, c):
-    print "-"
+def emit_times(self):
+    return "%s * %s" % (self.first.emit(), self.second.emit())
 times_class.emit = emit_times
 
 # Divide
@@ -606,8 +627,8 @@ divide_class = infix("/", 120)
 def eval_divide(self, env):
     return self.first.eval(env) / self.second.eval(env)
 divide_class.eval = eval_divide
-def emit_divide(self, c):
-    print "/"
+def emit_divide(self):
+    return "%s / %s" % (self.first.emit(), self.second.emit())
 divide_class.emit = emit_divide
 
 # Modulo
@@ -615,8 +636,8 @@ modulo_class = infix("%", 120)
 def eval_modulo(self, env):
     return self.first.eval(env) % self.second.eval(env)
 modulo_class.eval = eval_modulo
-def emit_modulo(self, c):
-    print "%"
+def emit_modulo(self):
+    return "%s % %s" % (self.first.emit(), self.second.emit())
 modulo_class.emit = emit_modulo
 
 
@@ -631,7 +652,7 @@ def infix_r(ttype, bp):
         return self
     def eval(self, env=None):
         pass
-    def emit(self, c=None):
+    def emit(self):
         pass
     sym = symbol(ttype, bp)
     sym.leftd = leftd
@@ -647,8 +668,8 @@ equals_class = infix_r("=", 30)
 def eval_equals(self, env):
     env[self.first] = self.second.eval(env)
 equals_class.eval = eval_equals
-def emit_equals(self, c):
-    #self.second.emit(c)
+def emit_equals(self):
+    #self.second.emit()
     pass
 equals_class.emit = emit_equals
 
@@ -658,7 +679,7 @@ def eval_increment(self, env):
     env[self.first.value] = env[self.first.value] + self.second.eval(env)    
     return
 increment_class.eval = eval_increment
-def emit_increment(self, c):
+def emit_increment(self):
     pass
 increment_class.emit = emit_increment
 
@@ -668,7 +689,7 @@ def eval_decrement(self, env):
     env[self.first] = self.first - self.second.eval(env)    
     return
 decrement_class.eval = eval_decrement
-def emit_decrement(self, c):
+def emit_decrement(self):
     pass
 decrement_class.emit = emit_decrement
 
@@ -680,7 +701,7 @@ def eval_boolor(self, env):
     else:
         return False
 boolor_class.eval = eval_boolor
-def emit_boolor(self, c):
+def emit_boolor(self):
     pass
 boolor_class.emit = emit_boolor
 
@@ -692,7 +713,7 @@ def eval_booland(self, env):
     else:
         return False
 booland_class.eval = eval_booland
-def emit_booland(self, c):
+def emit_booland(self):
     pass
 booland_class.emit = emit_booland
 
@@ -701,7 +722,7 @@ power_class = infix_r("**", 140)
 def eval_power(self, env):
     return self.first.eval(env) ** self.second.eval(env)
 power_class.eval = eval_power
-def emit_power(self, c):
+def emit_power(self):
     pass
 power_class.emit = emit_power
 
@@ -815,13 +836,13 @@ def nulld(self):
 def eval(self, env):
     for each in self.first:
         last_val = each.eval(env)
-        if each.value == "return":
+        if each.value == "return":  # or break?
             break
     return last_val  # Ruby-style: if no return statement, implicitly return last value
 @method(symbol("{"))
-def emit(self, c):
+def emit(self):
     for each in self.first:
-        each.emit(c)
+        each.emit()
 
 
 # Helper method for statements
@@ -839,24 +860,27 @@ def statement(ttype, bp):
 # Break
 break_class = statement("break", 0)
 def eval_break(self, env):
-    # break
-    pass
+    while self.value == "break":
+        break
 break_class.eval = eval_break
+def emit_break(self):
+    return "break;"
+break_class.emit = emit_break
 
 
 # Continue
 continue_class = statement("continue", 0)
 def eval_continue(self, env):
-    # continue
-    pass
+    while self.value == "continue":
+        continue
 continue_class.eval = eval_continue
 
 
 # Get
 get_class = statement("get", 20)
 def eval_get(self, env):
-    # get input from user
-    pass
+    env[self.first.value] = raw_input("> ")  # get input from user
+    return env[self.first.value]
 get_class.eval = eval_get
 
 
@@ -865,6 +889,9 @@ return_class = statement("return", 0)
 def eval_return(self, env):
     return self.first.eval(env)
 return_class.eval = eval_return
+def emit_return(self):
+    return "return %s;" % self.first.emit()
+return_class.emit = emit_return
 
 
 # Print
@@ -872,6 +899,9 @@ print_class = statement("print", 0)
 def eval_print(self, env):
     print self.first.eval(env)
 print_class.eval = eval_print
+def emit_print(self):
+    return "console.log('%s');" % self.first.emit()
+print_class.emit = emit_print
 
 
 # Variable declarations, with checks for arrays and structures
@@ -882,7 +912,7 @@ def stmtd(self):
     advance("ID")
     if not token.ttype in [ 'ID', 'INT', 'FLOAT', 'CHAR', 'BOOL', 'STRUCT', 'LBRACK' ]:
         raise SyntaxError("Expected variable type.")
-    if token.value == "[":      # check if array type annotation
+    if token.value == "[":      # check if array
         advance()
         type = []
         type.append(token)      # array size
@@ -901,6 +931,30 @@ def stmtd(self):
 def eval(self, env):
     if self.third: 
         env[self.first] = self.third.eval(env)
+@method(symbol("var"))
+def emit(self):
+    global const_table 
+    if "$" in self.first:
+        self.first.replace("$", "")
+
+    if self.third:
+        const_table[self.first] = self.third.emit()
+
+    if '[' in self.second:  # if var type is array
+        print "array"
+    elif self.second == "int":
+        print "var %s = %s|0;" % (self.first, const_table[self.first] if self.third else self.second)  # 32Uint
+    elif self.second == "float":
+        return "var %s = +(%s);" % (self.first, const_table[self.first] if self.third else self.second)  # double
+    elif self.second == "bool":
+        return "var %s" % self.first
+    elif self.second == "char":  # wait aren't strings just arrays of chars dressed up like strings 
+        return "CHAR IS NOT A THING"
+    elif self.second == "struct":
+        return "char"
+    
+    if self.third == "none":
+        self.second = "void"
 
 
 # While-loop statements
@@ -920,6 +974,12 @@ def eval(self, env):
         self.second.eval(env)
         if self.first.eval(env) == False:
             break
+@method(symbol("while"))
+def emit(self):
+    return '''while (%s) {\n
+            %s\n
+            } %s {
+            }''' % (self.first, self.second.emit())
 
 
 # For-loop statements
@@ -977,7 +1037,7 @@ def eval(self, env):
     else:
         return self.third.eval(env)
 
-
+# Elsif
 @method(symbol("elsif"))
 def stmtd(self):
     advance("(")
@@ -1003,7 +1063,7 @@ def eval(self, env):
     else:
         return self.third.eval(env)
 
-
+# Else
 @method(symbol("else"))
 def stmtd(self):
     expressions = parse_expression()
@@ -1039,40 +1099,59 @@ def stmtd(self):
 @method(symbol("def"))
 def eval(self, env):
     env[self.first] = self
+@method(symbol("def"))
+def emit(self):
+    global const_table  # do I need to declare this?
+    const_table[self.first] = self  # save fn defs to const_table also, or to new fn mapping dict?
+    
+    return '''function %s(stdlib, foreign, buffer) {\n
+                \t'use asm';\n
+                \t%s\n
+                }''' % (self.first, self.third)
+
+""" An asm.js module is a FunctionDeclaration or FunctionExpression node with the following form:
+    function f:Identifier(stdlib:Identifier, foreign:Identifier, heap:Identifier) {
+        "use asm";
+        var:VariableStatement...
+        fun:FunctionDeclaration...
+        table:VariableStatement...
+        exports:ReturnStatement
+    }
 
 
-######################################
-######################################
-
-""" 
-def generate_js():
-    # c = CodeObject()
-    program.emit(c)
-    # load_constants
-    # load return value??
-    # return code
-
-def write_file(filename, codeobj):
-    f = open(filename + ".kh", "w+")
-    timestamp = time.mktime(time.gmtime())
-    f.write(...)
-    f.write(...)
-    ...
-    f.close()
+    Valid asm.js return types:
+    +e:Expression;  // double
+    e:Expression|0;  // int
+    n:NumericLiteral;  // double or signed
+    ;               // void
 """
 
+
+######################################
+######################################
+
+def write_file(filename, jscode):
+    global header           # Python import (function containing a long string)
+    f = open(filename + ".js", "w+")
+    header = str(header())  # add typed array declarations to BOF
+    f.write(header)
+    f.write(jscode)
+    f.close()
 
 def main():
     filename = sys.argv[1] if len(sys.argv) > 1 else None
     start_lex(filename)
     prefix, suffix = filename.split(".")
     p = Program() 
-    p.stmtd()
-    p.eval(env)  # pass in empty global env dictionary
-    #c = p.emit()
-    #return c
-    # codeobj = generate_js()
-    # write_file(prefix, codeobj)
+    ast = p.stmtd().lines
+    print "ABSTRACT SYNTAX TREE: ", ast
+    print "Python interpreter says: "
+    p.eval(env)                     # pass in empty global env dictionary
+    # p.build_const_table()         # produce table of fn names & vars & locations in memory
+    print "Oh look it's asm.js: "
+    jscode = p.emit()               # list of strings? then join?
+    write_file(prefix, str(jscode))  # cast as string to avoid TypeError
+    return jscode
 
 if __name__ == "__main__":
     main()
