@@ -192,7 +192,7 @@ def t_error(t):
 def generate_tokens(program):    
     print "----------- Begin input program -----------"
     print program
-    print "----------- End input program -----------"
+    print "------------ End input program ------------"
     token_stream = []
     lexer = lex.lex()
     lexer.input(program)
@@ -251,22 +251,28 @@ class Program(object):
     def eval(self, env=None):
         for line in self.lines:
             line.eval(env)
-"""
-    def build_const_table(self):
-        const_table = {}
-        for line in self.lines:
-            if token == "var":
-                const_table[self.first] = # MEMORY LOCATION dependent on data type
-"""
-
-    def constant_fold(self):
-        pass
-
+    
     def emit(self, c=None):
+        jscode = []
         for line in self.lines:
             code = line.emit()
             print code
             jscode.append(code)
+        print "emit list of strings:"
+        print jscode
+        return jscode
+
+           
+"""
+def build_const_table(self):
+    const_table = {}
+    for line in self.lines:
+        if token == "var":
+            const_table[self.first] = # MEMORY LOCATION dependent on data type
+
+    def constant_fold(self):
+        pass
+"""
 
 
 ######################################
@@ -397,7 +403,7 @@ def eval_string(self, env):
     return self.value[1:-1]  # print out sans quotes
 string_class.eval = eval_string
 def emit_string(self):
-    print self.value
+    return self.value
 string_class.emit = emit_string
 
 symbol("true").nulld = lambda self: self
@@ -532,7 +538,7 @@ def eval_lesser(self, env):
         return False
 lesser_class.eval = eval_lesser
 def emit_lesser(self):
-    print "<"
+    return "%s < %s" % (self.first.emit(), self.second.emit())
 lesser_class.emit = emit_lesser
 
 # Less than or equal
@@ -544,7 +550,7 @@ def eval_lesseq(self, env):
         return False
 lesseq_class.eval = eval_lesseq
 def emit_lesseq(self):
-    print "<="
+    return "%s <= %s" % (self.first.emit(), self.second.emit())
 lesseq_class.emit = emit_lesseq
 
 # Greater than
@@ -556,7 +562,7 @@ def eval_greater(self, env):
         return False
 greater_class.eval = eval_greater
 def emit_greater(self):
-    print ">"
+    return "%s > %s" % (self.first.emit(), self.second.emit())
 greater_class.emit = emit_greater
 
 # Greater than or equal
@@ -568,7 +574,7 @@ def eval_greateq(self, env):
         return False
 greateq_class.eval = eval_greateq
 def emit_greateq(self):
-    print ">="
+    return "%s >= %s" % (self.first.emit(), self.second.emit())
 greateq_class.emit = emit_greateq
 
 # Equality
@@ -580,7 +586,7 @@ def eval_iseq(self, env):
         return False
 iseq_class.eval = eval_iseq
 def emit_iseq(self):
-    print "=="
+    return "%s == %s" % (self.first.emit(), self.second.emit())
 iseq_class.emit = emit_iseq
 
 # Non-equality
@@ -592,7 +598,7 @@ def eval_isnoteq(self, env):
         return False
 isnoteq_class.eval = eval_isnoteq
 def emit_isnoteq(self):
-    print "!="
+    return "%s != %s" % (self.first.emit(), self.second.emit())
 isnoteq_class.emit = emit_isnoteq
 
 # Plus
@@ -669,8 +675,7 @@ def eval_equals(self, env):
     env[self.first] = self.second.eval(env)
 equals_class.eval = eval_equals
 def emit_equals(self):
-    #self.second.emit()
-    pass
+    return "%s = %s" % (self.first.emit(), self.second.emit())
 equals_class.emit = emit_equals
 
 # Increment
@@ -680,7 +685,7 @@ def eval_increment(self, env):
     return
 increment_class.eval = eval_increment
 def emit_increment(self):
-    pass
+    return "%s += %s" % (self.first.emit(), self.second.emit())
 increment_class.emit = emit_increment
 
 # Decrement
@@ -690,7 +695,7 @@ def eval_decrement(self, env):
     return
 decrement_class.eval = eval_decrement
 def emit_decrement(self):
-    pass
+    return "%s -= %s" % (self.first.emit(), self.second.emit())
 decrement_class.emit = emit_decrement
 
 # Boolean 'or'
@@ -702,7 +707,7 @@ def eval_boolor(self, env):
         return False
 boolor_class.eval = eval_boolor
 def emit_boolor(self):
-    pass
+    return "%s || %s" % (self.first.emit(), self.second.emit())
 boolor_class.emit = emit_boolor
 
 # Boolean 'and'
@@ -714,7 +719,7 @@ def eval_booland(self, env):
         return False
 booland_class.eval = eval_booland
 def emit_booland(self):
-    pass
+    return "%s && %s" % (self.first.emit(), self.second.emit())
 booland_class.emit = emit_booland
 
 # Exponent 
@@ -723,7 +728,7 @@ def eval_power(self, env):
     return self.first.eval(env) ** self.second.eval(env)
 power_class.eval = eval_power
 def emit_power(self):
-    pass
+    return "%s ** %s" % (self.first.emit(), self.second.emit())
 power_class.emit = emit_power
 
 
@@ -800,6 +805,9 @@ def eval(self, env):
     print "THIS IS THE LIST EVAL"
     print "SELF VALUE", self.value
     return self.value
+@method(symbol("["))
+def emit(self):
+    return [each.emit() for each in self.first ]
     
 
 @method(symbol("["))
@@ -841,8 +849,7 @@ def eval(self, env):
     return last_val  # Ruby-style: if no return statement, implicitly return last value
 @method(symbol("{"))
 def emit(self):
-    for each in self.first:
-        each.emit()
+    return "{\n\t%s}" % "".join([ each.emit() + ";\n\t" for each in self.first ])
 
 
 # Helper method for statements
@@ -900,7 +907,7 @@ def eval_print(self, env):
     print self.first.eval(env)
 print_class.eval = eval_print
 def emit_print(self):
-    return "console.log('%s');" % self.first.emit()
+    return "console.log(%s)" % self.first.emit()
 print_class.emit = emit_print
 
 
@@ -910,7 +917,7 @@ def stmtd(self):
     self.first = token.value
     env[self.first] = None
     advance("ID")
-    if not token.ttype in [ 'ID', 'INT', 'FLOAT', 'CHAR', 'BOOL', 'STRUCT', 'LBRACK' ]:
+    if not token.ttype in [ 'ID', 'INT', 'FLOAT', 'STRING', 'BOOL', 'STRUCT', 'LBRACK' ]:
         raise SyntaxError("Expected variable type.")
     if token.value == "[":      # check if array
         advance()
@@ -934,24 +941,24 @@ def eval(self, env):
 @method(symbol("var"))
 def emit(self):
     global const_table 
-    if "$" in self.first:
+    if "$" in self.first:  # get rid of global prefix
         self.first.replace("$", "")
 
     if self.third:
-        const_table[self.first] = self.third.emit()
+        const_table[self.first] = self.third
 
     if '[' in self.second:  # if var type is array
         print "array"
     elif self.second == "int":
-        print "var %s = %s|0;" % (self.first, const_table[self.first] if self.third else self.second)  # 32Uint
+        return "var %s = %s|0;" % (self.first, const_table[self.first] if self.third else self.first)  # 32Uint
     elif self.second == "float":
-        return "var %s = +(%s);" % (self.first, const_table[self.first] if self.third else self.second)  # double
+        return "var %s = +(%s);" % (self.first, const_table[self.first] if self.third else self.first)  # double
     elif self.second == "bool":
         return "var %s" % self.first
-    elif self.second == "char":  # wait aren't strings just arrays of chars dressed up like strings 
-        return "CHAR IS NOT A THING"
+    elif self.second == "string":
+        return "\"%s\"" % self.first
     elif self.second == "struct":
-        return "char"
+        return "struct"
     
     if self.third == "none":
         self.second = "void"
@@ -976,10 +983,7 @@ def eval(self, env):
             break
 @method(symbol("while"))
 def emit(self):
-    return '''while (%s) {\n
-            %s\n
-            } %s {
-            }''' % (self.first, self.second.emit())
+    return "while (%s) %s" % (self.first.emit(), self.second.emit())
 
 
 # For-loop statements
@@ -1009,6 +1013,9 @@ def eval(self, env):
         self.first[2].eval(env)
         if self.first[1].eval(env) == False:
             break
+@method(symbol("for"))
+def emit(self):
+    return "for (%s %s; %s) %s" % (self.first[0].emit(), self.first[1].emit(), self.first[2].emit(), self.second.emit())
 
             
 # If/elsif/else conditional statements 
@@ -1036,6 +1043,10 @@ def eval(self, env):
         return self.second.eval(env)
     else:
         return self.third.eval(env)
+@method(symbol("if"))
+def emit(self):
+    return "if (%s) %s %s" % (self.first.emit(), self.second.emit(), self.third.emit() if self.third else "")
+
 
 # Elsif
 @method(symbol("elsif"))
@@ -1062,6 +1073,10 @@ def eval(self, env):
         return self.second.eval(env)
     else:
         return self.third.eval(env)
+@method(symbol("elsif"))
+def emit(self):
+    return "else if (%s) %s %s" % (self.first.emit(), self.second.emit(), self.third.emit() if self.third else "")
+
 
 # Else
 @method(symbol("else"))
@@ -1072,6 +1087,9 @@ def stmtd(self):
 @method(symbol("else"))
 def eval(self, env):
     return self.first.eval(env) 
+@method(symbol("else"))
+def emit(self):
+    return "else %s" % self.first.emit()  # emit block
 
 
 # Function declarations with "def"
@@ -1144,13 +1162,13 @@ def main():
     prefix, suffix = filename.split(".")
     p = Program() 
     ast = p.stmtd().lines
-    print "ABSTRACT SYNTAX TREE: ", ast
-    print "Python interpreter says: "
+    print "\nABSTRACT SYNTAX TREE: ", ast
+    print "\nPython interpreter says: "
     p.eval(env)                     # pass in empty global env dictionary
     # p.build_const_table()         # produce table of fn names & vars & locations in memory
-    print "Oh look it's asm.js: "
+    print "\nOh look it's asm.js: "
     jscode = p.emit()               # list of strings? then join?
-    write_file(prefix, str(jscode))  # cast as string to avoid TypeError
+    write_file(prefix, "\n".join(jscode))  # must write string type to file
     return jscode
 
 if __name__ == "__main__":
