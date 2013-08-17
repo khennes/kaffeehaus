@@ -1,7 +1,6 @@
 import sys
 import ply.lex as lex
 import re
-import time
 from header import header  # Header code for top of output JS file
 
 
@@ -9,10 +8,11 @@ from header import header  # Header code for top of output JS file
 # globalenv to make recursion possible
 # Implement 'get' (scanf); handle constants; postfix ++ and --
 # BNF grammar!
+# == vs === in asm.js
 # Improve error handling
 # Implement lexical scope for kicks
 # Change advance() to check NEXT (not current) token for value
-# Compile.
+# Add easter eggs to prove that program ran as valid asm.js 
 
 
 ### GLOBALS ###
@@ -258,8 +258,6 @@ class Program(object):
             code = line.emit()
             print code
             jscode.append(code)
-        print "emit list of strings:"
-        print jscode
         return jscode
 
            
@@ -384,7 +382,7 @@ def eval_id(self, env):
 ID_class.eval = eval_id
 def emit_id(self):
     if "$" in self.value:
-        self.value.replace("$", "")
+        self.value = self.value.replace("$", "")
     return self.value
 ID_class.emit = emit_id
 
@@ -586,7 +584,7 @@ def eval_iseq(self, env):
         return False
 iseq_class.eval = eval_iseq
 def emit_iseq(self):
-    return "%s == %s" % (self.first.emit(), self.second.emit())
+    return "%s === %s" % (self.first.emit(), self.second.emit())
 iseq_class.emit = emit_iseq
 
 # Non-equality
@@ -598,7 +596,7 @@ def eval_isnoteq(self, env):
         return False
 isnoteq_class.eval = eval_isnoteq
 def emit_isnoteq(self):
-    return "%s != %s" % (self.first.emit(), self.second.emit())
+    return "%s !== %s" % (self.first.emit(), self.second.emit())
 isnoteq_class.emit = emit_isnoteq
 
 # Plus
@@ -685,7 +683,10 @@ def eval_increment(self, env):
     return
 increment_class.eval = eval_increment
 def emit_increment(self):
-    return "%s += %s" % (self.first.emit(), self.second.emit())
+    if self.second.emit() == 1:
+        return "%s++" % self.first.emit()
+    else:
+        return "%s += %s" % (self.first.emit(), self.second.emit())
 increment_class.emit = emit_increment
 
 # Decrement
@@ -765,6 +766,8 @@ def eval(self, env):
     zipped = zip(arglist, pass_values)
     env.update(dict(zipped))             # create new var env for life of function
     return fn.third.eval(env)
+def emit(self):
+    return "%s(%s)" % (self.first, [ each.value for each in self.second ])
 
 
 # Dot notation (access struct members) 
@@ -788,7 +791,6 @@ def eval(self, env):
 # Lists 
 @method(symbol("["))
 def nulld(self):
-    print "NOW PARSE A LIST"
     self.first = []
     if token.value != "]":
         while True:  # TODO: Add extra 'if' to allow optional trailing commas
@@ -801,29 +803,24 @@ def nulld(self):
     advance("]")
     return self
 @method(symbol("["))
-def eval(self, env):
-    print "THIS IS THE LIST EVAL"
-    print "SELF VALUE", self.value
-    return self.value
-@method(symbol("["))
-def emit(self):
-    return [each.emit() for each in self.first ]
-    
-
-@method(symbol("["))
 def leftd(self, left):
-    print "NOW PARSE A LOOKUP"
     self.first = left
     self.second = parse_expression()
     advance("]")
-    return self  # return a lookup node - need a new class
+    return self
 @method(symbol("["))
 def eval(self, env):
-    print "THIS IS THE LOOKUP EVAL"
-    print "self", self.first
-    array_name = self.first
-    index_pos = self.second
-    return array_name[index_pos]
+    if isinstance(self.first, list):
+        return self.first
+    else:
+        array_name = env[self.first.value]
+        return array_name[self.second.value] 
+@method(symbol("["))
+def emit(self):
+    if isinstance(self.first, list):
+        return self.first
+    else:
+        return "%s[%s]" % (self.first.value, self.second.value) 
 
 
 # Statement blocks
@@ -849,7 +846,7 @@ def eval(self, env):
     return last_val  # Ruby-style: if no return statement, implicitly return last value
 @method(symbol("{"))
 def emit(self):
-    return "{\n\t%s}" % "".join([ each.emit() + ";\n\t" for each in self.first ])
+    return "{%s\n}" % "".join([ "\n\t" + each.emit() for each in self.first ])
 
 
 # Helper method for statements
@@ -871,7 +868,7 @@ def eval_break(self, env):
         break
 break_class.eval = eval_break
 def emit_break(self):
-    return "break;"
+    return "break"
 break_class.emit = emit_break
 
 
@@ -897,7 +894,7 @@ def eval_return(self, env):
     return self.first.eval(env)
 return_class.eval = eval_return
 def emit_return(self):
-    return "return %s;" % self.first.emit()
+    return "return %s" % self.first.emit()
 return_class.emit = emit_return
 
 
@@ -907,11 +904,11 @@ def eval_print(self, env):
     print self.first.eval(env)
 print_class.eval = eval_print
 def emit_print(self):
-    return "console.log(%s)" % self.first.emit()
+    return "console.log(%s);" % self.first.emit()
 print_class.emit = emit_print
 
 
-# Variable declarations, with checks for arrays and structures
+# Variable declarations
 @method(symbol("var"))
 def stmtd(self):
     self.first = token.value
@@ -936,32 +933,42 @@ def stmtd(self):
     return self    
 @method(symbol("var"))
 def eval(self, env):
-    if self.third: 
+    if self.third:
         env[self.first] = self.third.eval(env)
 @method(symbol("var"))
 def emit(self):
     global const_table 
-    if "$" in self.first:  # get rid of global prefix
-        self.first.replace("$", "")
+    # get rid of global prefix
+    if "$" in self.first:
+        self.first = self.first.replace('$', '')
 
     if self.third:
-        const_table[self.first] = self.third
+        const_table[self.first] = self.third.emit()
 
-    if '[' in self.second:  # if var type is array
-        print "array"
+    # if var is an array
+    if isinstance(self.second, list):
+        return "var %s = %s" % (self.first, const_table[self.first] if self.third else "[]")
+
+    # int -> 32Uint 
     elif self.second == "int":
-        return "var %s = %s|0;" % (self.first, const_table[self.first] if self.third else self.first)  # 32Uint
+        return "var %s = %s|0" % (self.first, const_table[self.first].emit() if self.third else self.first)
+
+    # float -> double
     elif self.second == "float":
-        return "var %s = +(%s);" % (self.first, const_table[self.first] if self.third else self.first)  # double
+        return "var %s = +(%s)" % (self.first, const_table[self.first].emit() if self.third else self.first)
+
+    # how to handle boolean types?
     elif self.second == "bool":
-        return "var %s" % self.first
+        return "var %s" % self.first  
+
     elif self.second == "string":
         return "\"%s\"" % self.first
+
     elif self.second == "struct":
-        return "struct"
+        return "var %s = %s" % (self.first, self.third.emit() if self.third else "{}")
     
-    if self.third == "none":
-        self.second = "void"
+    # if self.third == "none":
+    #     self.second = "void"
 
 
 # While-loop statements
@@ -1015,7 +1022,7 @@ def eval(self, env):
             break
 @method(symbol("for"))
 def emit(self):
-    return "for (%s %s; %s) %s" % (self.first[0].emit(), self.first[1].emit(), self.first[2].emit(), self.second.emit())
+    return "for (%s; %s; %s) %s" % (self.first[0].emit(), self.first[1].emit(), self.first[2].emit(), self.second.emit())
 
             
 # If/elsif/else conditional statements 
@@ -1045,7 +1052,7 @@ def eval(self, env):
         return self.third.eval(env)
 @method(symbol("if"))
 def emit(self):
-    return "if (%s) %s %s" % (self.first.emit(), self.second.emit(), self.third.emit() if self.third else "")
+    return "if (%s) %s %s" % (self.first.emit(), self.second.emit(), self.third.emit() if self.third else ";")
 
 
 # Elsif
@@ -1075,7 +1082,7 @@ def eval(self, env):
         return self.third.eval(env)
 @method(symbol("elsif"))
 def emit(self):
-    return "else if (%s) %s %s" % (self.first.emit(), self.second.emit(), self.third.emit() if self.third else "")
+    return "else if (%s) %s %s" % (self.first.emit(), self.second.emit(), self.third.emit() if self.third else ";")
 
 
 # Else
@@ -1089,7 +1096,7 @@ def eval(self, env):
     return self.first.eval(env) 
 @method(symbol("else"))
 def emit(self):
-    return "else %s" % self.first.emit()  # emit block
+    return "else %s;" % self.first.emit()  # emit block
 
 
 # Function declarations with "def"
@@ -1121,11 +1128,10 @@ def eval(self, env):
 def emit(self):
     global const_table  # do I need to declare this?
     const_table[self.first] = self  # save fn defs to const_table also, or to new fn mapping dict?
-    
-    return '''function %s(stdlib, foreign, buffer) {\n
-                \t'use asm';\n
-                \t%s\n
-                }''' % (self.first, self.third)
+    return '''function %s(stdlib, foreign, buffer)  %s %s \n}''' \
+            % (self.first, "\n\t\"use asm\";\n" + "".join([ "\tvar " + each.emit() + " = %s" % (each.value \
+            + "|0" if each.second == "int" else "+" + each.value) + ";\n" for each \
+            in self.second ]), self.third.emit())
 
 """ An asm.js module is a FunctionDeclaration or FunctionExpression node with the following form:
     function f:Identifier(stdlib:Identifier, foreign:Identifier, heap:Identifier) {
