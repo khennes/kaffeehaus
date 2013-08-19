@@ -410,7 +410,7 @@ def eval_true(self, env):
     return True 
 true_class.eval = eval_true
 def emit_true(self):
-    print self.value
+    return "true" 
 true_class.emit = emit_true
 
 symbol("false").nulld = lambda self: self
@@ -419,7 +419,7 @@ def eval_false(self, env):
     return False 
 false_class.eval = eval_false
 def emit_false(self):
-    print self.value
+    return "false"
 false_class.emit = emit_false
 
 symbol("none").nulld = lambda self: self
@@ -428,7 +428,7 @@ def eval_none(self, env):
     return None 
 none_class.eval = eval_none
 def emit_none(self):
-    print self.value
+    return "void"
 none_class.emit = emit_none
 
 symbol("int").nulld = lambda self: self
@@ -437,7 +437,7 @@ def eval_int(self, env):
     pass
 int_class.eval = eval_int
 def emit_int(self):
-    print self.value
+    return "int"
 int_class.emit = emit_int 
 
 symbol("bool").nulld = lambda self: self
@@ -446,7 +446,7 @@ def eval_bool(self, env):
     pass
 bool_class.eval = eval_bool
 def emit_bool(self):
-    print self.value
+    return "bool"
 bool_class.emit = emit_bool
 
 symbol("float").nulld = lambda self: self
@@ -641,7 +641,7 @@ def eval_modulo(self, env):
     return self.first.eval(env) % self.second.eval(env)
 modulo_class.eval = eval_modulo
 def emit_modulo(self):
-    return "%s % %s" % (self.first.emit(), self.second.emit())
+    return "%s +++ %s" % (self.first.emit(), self.second.emit())
 modulo_class.emit = emit_modulo
 
 
@@ -750,12 +750,11 @@ def method(NewSymbol):
 def leftd(self, left):
     self.first = left
     self.second = []
-    if token.value != ")":
-        while True:
-            self.second.append(parse_expression())
-            if token.value != ",":
-                break
-            advance(",")
+    while token.value != ")":
+        self.second.append(parse_expression())
+        if token.value != ",":
+            break
+        advance(",")
     advance(")")
     return self
 @method(symbol("("))
@@ -766,8 +765,14 @@ def eval(self, env):
     zipped = zip(arglist, pass_values)
     env.update(dict(zipped))             # create new var env for life of function
     return fn.third.eval(env)
+@method(symbol("("))
 def emit(self):
-    return "%s(%s)" % (self.first, [ each.value for each in self.second ])
+    fn = const_table[self.first.value]
+    arglist = [ each for each in fn.second ]
+    pass_values = [ item.emit() for item in self.second ]
+    zipped = zip(arglist, pass_values)
+    const_table.update(dict(zipped))
+    return "%s(%r)" % (self.first, ", ".join([ each.emit() for each in self.second ]))
 
 
 # Dot notation (access struct members) 
@@ -786,20 +791,21 @@ def eval(self, env):
     if self.third: 
         env[self.first.value][self.second] = self.third
     return env[self.first.value]
+@method(symbol("."))
+def emit(self):
+    if self.third:
+        env[self.first.value][self.second] = self.third
 
 
 # Lists 
 @method(symbol("["))
 def nulld(self):
     self.first = []
-    if token.value != "]":
-        while True:  # TODO: Add extra 'if' to allow optional trailing commas
-            if token.value == "]":
-                break
-            self.first.append(parse_expression())
-            if token.value != ",":
-                break
-            advance(",")
+    while token.value != "]":  # TODO: Add extra 'if' to allow optional trailing commas
+        self.first.append(parse_expression())
+        if token.value != ",":
+            break
+        advance(",")
     advance("]")
     return self
 @method(symbol("["))
@@ -827,13 +833,10 @@ def emit(self):
 @method(symbol("{"))
 def nulld(self):
     statements = []
-    if token.value != "}":
-        while True:
-            if token.value == "}":
-                break
-            statements.append(parse_expression())
-            if token.value == ",":
-                advance()
+    while token.value != "}":
+        statements.append(parse_expression())
+        if token.value == ",":
+            advance()
     advance("}")
     self.first = statements 
     return self
@@ -951,11 +954,11 @@ def emit(self):
 
     # int -> 32Uint 
     elif self.second == "int":
-        return "var %s = %s|0" % (self.first, const_table[self.first].emit() if self.third else self.first)
+        return "var %s = %s|0" % (self.first, const_table[self.first] if self.third else self.first)
 
     # float -> double
     elif self.second == "float":
-        return "var %s = +(%s)" % (self.first, const_table[self.first].emit() if self.third else self.first)
+        return "var %s = +(%s)" % (self.first, const_table[self.first] if self.third else self.first)
 
     # how to handle boolean types?
     elif self.second == "bool":
@@ -965,6 +968,7 @@ def emit(self):
         return "\"%s\"" % self.first
 
     elif self.second == "struct":
+        print "struct"
         return "var %s = %s" % (self.first, self.third.emit() if self.third else "{}")
     
     # if self.third == "none":
@@ -998,13 +1002,10 @@ def emit(self):
 def stmtd(self):
     conditions = []
     advance("(")
-    if token.value != ")":
-        while True:
-            conditions.append(parse_expression())
-            if token.value == ";":
-                advance()
-            if token.value == ")":
-                break
+    while token.value != ")":
+        conditions.append(parse_expression())
+        if token.value == ";":
+            advance()
     advance(")")
     self.first = conditions
     if token.value != "{":
@@ -1018,11 +1019,9 @@ def eval(self, env):
     while self.first[1].eval(env) == True:
         self.second.eval(env)
         self.first[2].eval(env)
-        if self.first[1].eval(env) == False:
-            break
 @method(symbol("for"))
 def emit(self):
-    return "for (%s; %s; %s) %s" % (self.first[0].emit(), self.first[1].emit(), self.first[2].emit(), self.second.emit())
+    return "for (%s) %s" % (self.first[0].emit() + "; " + self.first[1].emit() + "; " + self.first[2].emit(), self.second.emit())
 
             
 # If/elsif/else conditional statements 
@@ -1048,11 +1047,14 @@ def stmtd(self):
 def eval(self, env):
     if self.first.eval(env) == True:
         return self.second.eval(env)
-    else:
+    elif self.third:
         return self.third.eval(env)
 @method(symbol("if"))
 def emit(self):
-    return "if (%s) %s %s" % (self.first.emit(), self.second.emit(), self.third.emit() if self.third else ";")
+    if self.third:
+        return "if (%s) %s %s" % (self.first.emit(), self.second.emit(), self.third.emit())
+    else:
+        return "if (%s) %s;" % (self.first.emit(), self.second.emit())
 
 
 # Elsif
@@ -1078,11 +1080,14 @@ def stmtd(self):
 def eval(self, env):
     if self.first.eval(env) == True:
         return self.second.eval(env)
-    else:
+    elif self.third:
         return self.third.eval(env)
 @method(symbol("elsif"))
 def emit(self):
-    return "else if (%s) %s %s" % (self.first.emit(), self.second.emit(), self.third.emit() if self.third else ";")
+    if self.third:
+        return "else if (%s) %s %s" % (self.first.emit(), self.second.emit(), self.third.emit())
+    else:
+        return "else if (%s) %s;" % (self.first.emit(), self.second.emit())
 
 
 # Else
@@ -1106,14 +1111,11 @@ def stmtd(self):
     advance("ID")
     arguments = []
     advance("(")
-    if token.value != ")":
-        while True:
-            if token.value == ")":
-                break
-            arguments.append(parse_expression())
-            if token.value != ",":
-                break
-            advance(",")
+    while token.value != ")":
+        arguments.append(parse_expression())
+        if token.value != ",":
+            break
+        advance(",")
     self.second = arguments
     advance(")")
 #   brace = advance("{")
@@ -1128,36 +1130,17 @@ def eval(self, env):
 def emit(self):
     global const_table  # do I need to declare this?
     const_table[self.first] = self  # save fn defs to const_table also, or to new fn mapping dict?
-    return '''function %s(stdlib, foreign, buffer)  %s %s \n}''' \
-            % (self.first, "\n\t\"use asm\";\n" + "".join([ "\tvar " + each.emit() + " = %s" % (each.value \
-            + "|0" if each.second == "int" else "+" + each.value) + ";\n" for each \
-            in self.second ]), self.third.emit())
-
-""" An asm.js module is a FunctionDeclaration or FunctionExpression node with the following form:
-    function f:Identifier(stdlib:Identifier, foreign:Identifier, heap:Identifier) {
-        "use asm";
-        var:VariableStatement...
-        fun:FunctionDeclaration...
-        table:VariableStatement...
-        exports:ReturnStatement
-    }
-
-
-    Valid asm.js return types:
-    +e:Expression;  // double
-    e:Expression|0;  // int
-    n:NumericLiteral;  // double or signed
-    ;               // void
-"""
+    return '''function %s(%s) %s''' \
+            % (self.first, ", ".join([ each.emit() for each in self.second ]), self.third.emit())
 
 
 ######################################
 ######################################
 
 def write_file(filename, jscode):
-    global header           # Python import (function containing a long string)
+    global header           # Python import (function containing a long JS string)
     f = open(filename + ".js", "w+")
-    header = str(header())  # add typed array declarations to BOF
+    header = str(header())
     f.write(header)
     f.write(jscode)
     f.close()
@@ -1172,8 +1155,8 @@ def main():
     print "\nPython interpreter says: "
     p.eval(env)                     # pass in empty global env dictionary
     # p.build_const_table()         # produce table of fn names & vars & locations in memory
-    print "\nOh look it's asm.js: "
-    jscode = p.emit()               # list of strings? then join?
+    print "\nOh look it's Javascript: "
+    jscode = p.emit()
     write_file(prefix, "\n".join(jscode))  # must write string type to file
     return jscode
 
