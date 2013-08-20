@@ -1,0 +1,35 @@
+<DOCTYPE html>
+<html>
+  <head>
+    <title>asm.js | compiled Javascript</title>
+    <style>
+      body {
+        font-size: 16px;
+        font-family: courier, sans-serif;
+        font-weight: bold;
+        padding: 50px;
+      }
+      h2 {
+        font-family: Helvetica, sans-serif;
+        font-size: 40px;
+        text-align: center;
+      }
+      #button {
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>waffle &#x2192 asm.js</h2>
+    <div id="compilerOutput">
+    </div>
+    <script src="jquery.js">
+    </script>
+    <script src="/tests/fizzbuzz.js">
+    </script>
+    <script>
+      $('#button').on('click', main);
+    </script>
+    <input id="button" type="button" value="Make asm.js">
+  </body>
+</html>
