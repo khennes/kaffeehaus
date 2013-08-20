@@ -4,9 +4,6 @@ import re
 import header  # Header code for top of output JS file
 
 
-# every str node, add to list & + heap usage (1 byte per char)
-#
-
 """ TODO """
 # Implement 'get' (scanf); handle constants; postfix ++ and --
 # BNF grammar
@@ -778,7 +775,7 @@ def emit(self):
     pass_values = [ item.emit() for item in self.second ]
     zipped = zip(arglist, pass_values)
     const_table.update(dict(zipped))
-    return "%s(%s)" % (self.first, ", ".join([ each.emit() for each in self.second ]))
+    return "%s(%s)" % (self.first, ", ".join([ each.emit() for each in self.second ])) 
 
 
 # Dot notation (access struct members) 
@@ -904,10 +901,10 @@ def eval_return(self, env):
 return_class.eval = eval_return
 def emit_return(self):
     # no return necessary when return type is void
-    if self.first:
-        return "return %s" % self.first.emit()
-    else:
-        return
+    #if self.first:
+    #    return "return %s" % self.first.emit()
+    #else:
+    return
 return_class.emit = emit_return
 
 
@@ -1149,7 +1146,7 @@ def emit(self):
 def write_file(filename, jscode):
     global header, footer, heap_access
     f = open(filename + ".js", "w+")
-    returns = "{ fizzbuzz: fizzbuzz }"
+    returns = "return { fizzbuzz: fizzbuzz }"
     output = header.TEMPLATE % (strings, jscode, ";\n\t".join([ each for each in heap_access ]), returns)
     f.write(output)
     f.close()
