@@ -14,22 +14,16 @@
         font-size: 40px;
         text-align: center;
       }
-      #button {
-        text-align: center;
+      div {
+        width: auto;
+        word-wrap: break-word;
       }
     </style>
   </head>
   <body>
     <h2>waffle &#x2192 asm.js</h2>
-    <div id="compilerOutput">
-    </div>
-    <script src="jquery.js">
-    </script>
-    <script src="/tests/fizzbuzz.js">
-    </script>
-    <script>
-      $('#button').on('click', main);
-    </script>
-    <input id="button" type="button" value="Make asm.js">
+    <div id="compilerOutput"></div>
+    <script src="jquery.js"></script>
+    <script src="tests/fizzbuzz.js"></script>
   </body>
 </html>

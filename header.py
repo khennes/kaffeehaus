@@ -5,56 +5,56 @@ view [ArrayBufferView class]."""
 
 TEMPLATE = '''\
 main = function() {
-var heap = new ArrayBuffer(512);
 
-function Module(stdlib, foreign, heap) {
-    "use asm";
+    var heap = new ArrayBuffer(512);
+    strings = %s;
 
-    <!-- Globals -->
-    var I8 = new stdlib.Int8Array(heap);
-    var U8 = new stdlib.Uint8Array(heap);
-    var 16I = new stdlib.Int16Array(heap);
-    var 16U = new stdlib.Uint16Array(heap);
-    var I32 = new stdlib.Int32Array(heap);
-    var U32 = new stdlib.Uint32Array(heap);
+    function Module(stdlib, foreign, heap) {
+        "use asm";
 
-    var log = foreign.print;
+        <!-- Globals -->
+        var I8 = new stdlib.Int8Array(heap);
+        var U8 = new stdlib.Uint8Array(heap);
+        var I16 = new stdlib.Int16Array(heap);
+        var U16 = new stdlib.Uint16Array(heap);
+        var I32 = new stdlib.Int32Array(heap);
+        var U32 = new stdlib.Uint32Array(heap);
 
-    <!-- Functions -->
-    
-    %s
+        var log = foreign.print;
 
-    <!-- End Functions -->
-    
-    <!-- Pointers to heap access -->
+        <!-- Functions -->
+        
+            %s
 
-    %s;
+        <!-- End Functions -->
+        
+        <!-- Pointers to heap access -->
 
-    <!-- Exporting compiled functions -->
+        %s;
 
-    %s;
-}
+        <!-- Exporting compiled functions -->
 
-var print = function(input) {
-    document.getElementById("compilerOutput").innerHTML += input;
-}
+        %s;
+    }
 
-<!-- Revert strings to characters -->
-
-for (i = 0; i <= heap; i++) {
-    while (heap[i] != "\0") {
-        heap[i] = String.fromCharCode(heap[i])
-        print heap[i]
+    var print = function(input) {
+        for (i = 0; i <= input; i++) {
+            while (heap[i] != "\0") {
+                heap[i] = String.fromCharCode(heap[i]);
+            }
         }
-    print heap[i]
-}
+        document.getElementById("compilerOutput").innerHTML += input;
+    }
+
+    <!-- Revert strings to characters -->
 
 
-var foreign = {"print": print};
+    var foreign = {"print": print};
 
-var asmjs = Module(window, foreign, heap);
+    var asmjs = Module(window, foreign, heap);
+    return asmjs
 
-}
-main();
+    }
+main().asmjs();
 '''
 

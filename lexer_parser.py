@@ -405,7 +405,7 @@ string_class.eval = eval_string
 def emit_string(self):
     global heap_usage
     strings.append(self.value)  # add to global list of strings
-    heap_access.append("heap[U8]>>%d = strings[%d]" % (heap_usage, strings.index(self.value)))  # assumes 8 bit ints
+    heap_access.append("U8[strings[%d]]>>%d" % (heap_usage, strings.index(self.value)))  # assumes 8 bit ints
     heap_usage += len(self.value[1:-1]) + 1  # count num bytes to allocate in the heap
     return [ ord(letter) for letter in self.value[1:-1].strip('"') ]  # return list of ints
 string_class.emit = emit_string
@@ -590,7 +590,7 @@ def eval_iseq(self, env):
         return False
 iseq_class.eval = eval_iseq
 def emit_iseq(self):
-    return "%s === (%s)" % (self.first.emit(), self.second.emit())
+    return "%s === %s|0" % (self.first.emit(), self.second.emit())
 iseq_class.emit = emit_iseq
 
 # Non-equality
@@ -602,7 +602,7 @@ def eval_isnoteq(self, env):
         return False
 isnoteq_class.eval = eval_isnoteq
 def emit_isnoteq(self):
-    return "%s !== (%s)" % (self.first.emit(), self.second.emit())
+    return "%s !== %s|0" % (self.first.emit(), self.second.emit())
 isnoteq_class.emit = emit_isnoteq
 
 # Plus
@@ -679,7 +679,7 @@ def eval_equals(self, env):
     env[self.first] = self.second.eval(env)
 equals_class.eval = eval_equals
 def emit_equals(self):
-    return "%s = %s" % (self.first.emit(), self.second.emit())
+    return "%s = %s|0" % (self.first.emit(), self.second.emit())
 equals_class.emit = emit_equals
 
 # Increment
@@ -966,7 +966,7 @@ def emit(self):
 
     # int -> 32Uint 
     elif self.second == "int":
-        return "var %s = (%s)|0;" % (self.first, const_table[self.first] if self.third else self.first)
+        return "var %s = %s|0;" % (self.first, const_table[self.first] if self.third else self.first)
 
     # float -> double
     elif self.second == "float":
@@ -1030,7 +1030,7 @@ def eval(self, env):
         self.first[2].eval(env)
 @method(symbol("for"))
 def emit(self):
-    return "for (%s) %s" % (self.first[0].emit() + "; " + self.first[1].emit() + "; " + self.first[2].emit(), self.second.emit())
+    return "for (%s) %s" % (self.first[0].emit() + self.first[1].emit() + "; " + self.first[2].emit(), self.second.emit())
 
             
 # If/elsif/else conditional statements 
@@ -1150,7 +1150,7 @@ def write_file(filename, jscode):
     global header, footer, heap_access
     f = open(filename + ".js", "w+")
     returns = "{ fizzbuzz: fizzbuzz }"
-    output = header.TEMPLATE % (jscode, [ each + ";\n" for each in heap_access ], returns)
+    output = header.TEMPLATE % (strings, jscode, ";\n\t".join([ each for each in heap_access ]), returns)
     f.write(output)
     f.close()
 
@@ -1166,7 +1166,7 @@ def main():
     # p.build_const_table()         # produce table of fn names & vars & locations in memory
     print "\nOh look it's Javascript: "
     jscode = p.emit()
-    write_file(prefix, "\n".join(jscode))  # must write string type to file
+    write_file(prefix, "\n".join(jscode))  # must write type string to file
     return jscode
 
 if __name__ == "__main__":
