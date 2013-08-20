@@ -37,6 +37,7 @@ main = function() {
         %s;
     }
 
+    <!-- Revert strings to characters -->
     var print = function(input) {
         if (typeof(input) == "object") {
             for (var i = 0; i <= input.length; i++) {
@@ -50,16 +51,14 @@ main = function() {
         document.getElementById("compilerOutput").innerHTML += "<br />";
     }
 
-    <!-- Revert strings to characters -->
-
+    <!-- Declare foreign function interface -->
     var foreign = {"print": print};
 
+    <!-- Call asm.js module inside of regular script -->
     var asmjs = Module(window, foreign, heap);
-    console.log("RETURNING");
     return asmjs
-    }
+}
 
 main().fizzbuzz();
-
 '''
 
