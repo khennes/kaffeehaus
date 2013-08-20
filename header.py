@@ -1,7 +1,5 @@
 """ Header/footer for compiled .js files """
 
-""" Typed arrays split implementation into a buffer [ArrayBuffer class] and a
-view [ArrayBufferView class]."""
 
 TEMPLATE = '''\
 main = function() {
@@ -22,6 +20,7 @@ main = function() {
 
         var log = foreign.print;
 
+
         <!-- Functions -->
         
             %s
@@ -38,6 +37,7 @@ main = function() {
     }
 
     <!-- Revert strings to characters -->
+
     var print = function(input) {
         if (typeof(input) == "object") {
             for (var i = 0; i <= input.length; i++) {

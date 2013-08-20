@@ -391,7 +391,7 @@ def eval_num(self, env):
     return self.value 
 num_class.eval = eval_num
 def emit_num(self):
-    return self.value
+    return "(%d|0)" % self.value
 num_class.emit = emit_num
 
 symbol("STRING").nulld = lambda self: self
@@ -587,7 +587,7 @@ def eval_iseq(self, env):
         return False
 iseq_class.eval = eval_iseq
 def emit_iseq(self):
-    return "%s === %s|0" % (self.first.emit(), self.second.emit())
+    return "%s == %s" % (self.first.emit(), self.second.emit())
 iseq_class.emit = emit_iseq
 
 # Non-equality
@@ -599,7 +599,7 @@ def eval_isnoteq(self, env):
         return False
 isnoteq_class.eval = eval_isnoteq
 def emit_isnoteq(self):
-    return "%s !== %s|0" % (self.first.emit(), self.second.emit())
+    return "%s != %s|0" % (self.first.emit(), self.second.emit())
 isnoteq_class.emit = emit_isnoteq
 
 # Plus
@@ -676,7 +676,7 @@ def eval_equals(self, env):
     env[self.first] = self.second.eval(env)
 equals_class.eval = eval_equals
 def emit_equals(self):
-    return "%s = %s|0" % (self.first.emit(), self.second.emit())
+    return "%s = %s" % (self.first.emit(), self.second.emit())
 equals_class.emit = emit_equals
 
 # Increment
@@ -723,7 +723,7 @@ def eval_booland(self, env):
         return False
 booland_class.eval = eval_booland
 def emit_booland(self):
-    return "%s && %s" % (self.first.emit(), self.second.emit())
+    return "(%s) & (%s)" % (self.first.emit(), self.second.emit())
 booland_class.emit = emit_booland
 
 # Exponent 
@@ -963,7 +963,7 @@ def emit(self):
 
     # int -> 32Uint 
     elif self.second == "int":
-        return "var %s = %s|0;" % (self.first, const_table[self.first] if self.third else self.first)
+        return "var %s = %s;" % (self.first, const_table[self.first] if self.third else self.first)
 
     # float -> double
     elif self.second == "float":
@@ -1027,7 +1027,7 @@ def eval(self, env):
         self.first[2].eval(env)
 @method(symbol("for"))
 def emit(self):
-    return "for (%s) %s" % (self.first[0].emit() + self.first[1].emit() + "; " + self.first[2].emit(), self.second.emit())
+    return "for (%s) %s" % (self.first[0].emit() + " " + self.first[1].emit() + "; " + self.first[2].emit(), self.second.emit())
 
             
 # If/elsif/else conditional statements 
