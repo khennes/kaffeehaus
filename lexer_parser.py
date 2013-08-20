@@ -1,18 +1,17 @@
 import sys
 import ply.lex as lex
 import re
-from header import header  # Header code for top of output JS file
+import header  # Header code for top of output JS file
 
+
+# every str node, add to list & + heap usage (1 byte per char)
+#
 
 """ TODO """
-# globalenv to make recursion possible
 # Implement 'get' (scanf); handle constants; postfix ++ and --
-# BNF grammar!
-# == vs === in asm.js
+# BNF grammar
 # Improve error handling
 # Implement lexical scope for kicks
-# Change advance() to check NEXT (not current) token for value
-# Add easter eggs to prove that program ran as valid asm.js 
 
 
 ### GLOBALS ###
@@ -21,6 +20,9 @@ symbol_table = {}   # store instantiated symbol classes
 token_stack = []    # contains remaining tokens
 env = {}            # store declared variables for evaluation 
 const_table = {}    # store variables for codegen
+strings = []        # keep list of strings to convert to ints
+heap_usage = 0      # keep track to allocate space for strings in heap
+heap_access = []    # global list of string locations in memory
 
 
 ######################################
@@ -401,7 +403,11 @@ def eval_string(self, env):
     return self.value[1:-1]  # print out sans quotes
 string_class.eval = eval_string
 def emit_string(self):
-    return self.value
+    global heap_usage
+    strings.append(self.value)  # add to global list of strings
+    heap_access.append("heap[U8]>>%d = strings[%d]" % (heap_usage, strings.index(self.value)))  # assumes 8 bit ints
+    heap_usage += len(self.value[1:-1]) + 1  # count num bytes to allocate in the heap
+    return [ ord(letter) for letter in self.value[1:-1].strip('"') ]  # return list of ints
 string_class.emit = emit_string
 
 symbol("true").nulld = lambda self: self
@@ -584,7 +590,7 @@ def eval_iseq(self, env):
         return False
 iseq_class.eval = eval_iseq
 def emit_iseq(self):
-    return "%s === %s" % (self.first.emit(), self.second.emit())
+    return "%s === (%s)" % (self.first.emit(), self.second.emit())
 iseq_class.emit = emit_iseq
 
 # Non-equality
@@ -596,7 +602,7 @@ def eval_isnoteq(self, env):
         return False
 isnoteq_class.eval = eval_isnoteq
 def emit_isnoteq(self):
-    return "%s !== %s" % (self.first.emit(), self.second.emit())
+    return "%s !== (%s)" % (self.first.emit(), self.second.emit())
 isnoteq_class.emit = emit_isnoteq
 
 # Plus
@@ -641,7 +647,7 @@ def eval_modulo(self, env):
     return self.first.eval(env) % self.second.eval(env)
 modulo_class.eval = eval_modulo
 def emit_modulo(self):
-    return "%s +++ %s" % (self.first.emit(), self.second.emit())
+    return "%s %% %s" % (self.first.emit(), self.second.emit())
 modulo_class.emit = emit_modulo
 
 
@@ -772,7 +778,7 @@ def emit(self):
     pass_values = [ item.emit() for item in self.second ]
     zipped = zip(arglist, pass_values)
     const_table.update(dict(zipped))
-    return "%s(%r)" % (self.first, ", ".join([ each.emit() for each in self.second ]))
+    return "%s(%s)" % (self.first, ", ".join([ each.emit() for each in self.second ]))
 
 
 # Dot notation (access struct members) 
@@ -897,7 +903,11 @@ def eval_return(self, env):
     return self.first.eval(env)
 return_class.eval = eval_return
 def emit_return(self):
-    return "return %s" % self.first.emit()
+    # no return necessary when return type is void
+    if self.first:
+        return "return %s" % self.first.emit()
+    else:
+        return
 return_class.emit = emit_return
 
 
@@ -907,7 +917,8 @@ def eval_print(self, env):
     print self.first.eval(env)
 print_class.eval = eval_print
 def emit_print(self):
-    return "console.log(%s);" % self.first.emit()
+    # will have to pass console.log in to the asm.js module as an FFI (alias: log)
+    return "log(%s);" % self.first.emit()
 print_class.emit = emit_print
 
 
@@ -945,6 +956,7 @@ def emit(self):
     if "$" in self.first:
         self.first = self.first.replace('$', '')
 
+    # upon assignment, store value in const_table
     if self.third:
         const_table[self.first] = self.third.emit()
 
@@ -954,18 +966,15 @@ def emit(self):
 
     # int -> 32Uint 
     elif self.second == "int":
-        return "var %s = %s|0" % (self.first, const_table[self.first] if self.third else self.first)
+        return "var %s = (%s)|0;" % (self.first, const_table[self.first] if self.third else self.first)
 
     # float -> double
     elif self.second == "float":
         return "var %s = +(%s)" % (self.first, const_table[self.first] if self.third else self.first)
 
-    # how to handle boolean types?
+    # need to convert booleans to 0 and 1 
     elif self.second == "bool":
         return "var %s" % self.first  
-
-    elif self.second == "string":
-        return "\"%s\"" % self.first
 
     elif self.second == "struct":
         print "struct"
@@ -1054,7 +1063,7 @@ def emit(self):
     if self.third:
         return "if (%s) %s %s" % (self.first.emit(), self.second.emit(), self.third.emit())
     else:
-        return "if (%s) %s;" % (self.first.emit(), self.second.emit())
+        return "if (%s) %s" % (self.first.emit(), self.second.emit())
 
 
 # Elsif
@@ -1087,7 +1096,7 @@ def emit(self):
     if self.third:
         return "else if (%s) %s %s" % (self.first.emit(), self.second.emit(), self.third.emit())
     else:
-        return "else if (%s) %s;" % (self.first.emit(), self.second.emit())
+        return "else if (%s) %s" % (self.first.emit(), self.second.emit())
 
 
 # Else
@@ -1101,7 +1110,7 @@ def eval(self, env):
     return self.first.eval(env) 
 @method(symbol("else"))
 def emit(self):
-    return "else %s;" % self.first.emit()  # emit block
+    return "else %s" % self.first.emit()  # emit block
 
 
 # Function declarations with "def"
@@ -1138,11 +1147,11 @@ def emit(self):
 ######################################
 
 def write_file(filename, jscode):
-    global header           # Python import (function containing a long JS string)
+    global header, footer, heap_access
     f = open(filename + ".js", "w+")
-    header = str(header())
-    f.write(header)
-    f.write(jscode)
+    returns = "{ fizzbuzz: fizzbuzz }"
+    output = header.TEMPLATE % (jscode, [ each + ";\n" for each in heap_access ], returns)
+    f.write(output)
     f.close()
 
 def main():
