@@ -2,8 +2,7 @@ var $y int = 5
 
 def add(x) {
     var z int = $y + x
-    print z
     return z
 }
 
-print add(2)
+print add(6)

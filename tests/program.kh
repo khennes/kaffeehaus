@@ -1,0 +1,17 @@
+/* Testing 
+multi-line
+comments */
+
+$mango bool  # Testing global variable
+
+def add() {  # Require typed parameters/return values? Not sure yet.
+    x int = 5
+    if x == 5 {
+        $mango = true
+        return x + x
+    } else {
+        $mango = false
+        return x
+    }
+}
+
