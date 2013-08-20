@@ -405,7 +405,7 @@ string_class.eval = eval_string
 def emit_string(self):
     global heap_usage
     strings.append(self.value)  # add to global list of strings
-    heap_access.append("U8[strings[%d]]>>%d" % (heap_usage, strings.index(self.value)))  # assumes 8 bit ints
+    heap_access.append("U8[strings[%d]]>>%d" % (strings.index(self.value), heap_usage))  # assumes 8 bit ints
     heap_usage += len(self.value[1:-1]) + 1  # count num bytes to allocate in the heap
     return [ ord(letter) for letter in self.value[1:-1].strip('"') ]  # return list of ints
 string_class.emit = emit_string

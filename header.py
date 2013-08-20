@@ -38,23 +38,28 @@ main = function() {
     }
 
     var print = function(input) {
-        for (i = 0; i <= input; i++) {
-            while (heap[i] != "\0") {
-                heap[i] = String.fromCharCode(heap[i]);
+        if (typeof(input) == "object") {
+            for (var i = 0; i <= input.length; i++) {
+                var char_ = String.fromCharCode(input[i]);
+                document.getElementById("compilerOutput").innerHTML += char_;
             }
         }
-        document.getElementById("compilerOutput").innerHTML += input;
+        else {
+            document.getElementById("compilerOutput").innerHTML += input;
+        }
+        document.getElementById("compilerOutput").innerHTML += "<br />";
     }
 
     <!-- Revert strings to characters -->
 
-
     var foreign = {"print": print};
 
     var asmjs = Module(window, foreign, heap);
+    console.log("RETURNING");
     return asmjs
-
     }
-main().asmjs();
+
+main().fizzbuzz();
+
 '''
 
