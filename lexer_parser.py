@@ -1,7 +1,7 @@
 import sys
 import ply.lex as lex
 import re
-import header  # Header code for top of output JS file
+import header  # template for output JS file
 
 
 """ TODO """
@@ -15,11 +15,12 @@ import header  # Header code for top of output JS file
 token = None        # contains current token object
 symbol_table = {}   # store instantiated symbol classes
 token_stack = []    # contains remaining tokens
-env = {}            # store declared variables for evaluation 
+env = {}            # store declared variables for evaluation/interpretation
 const_table = {}    # store variables for codegen
-strings = []        # keep list of strings to convert to ints
-heap_usage = 0      # keep track to allocate space for strings in heap
-heap_access = []    # global list of string locations in memory
+var_pile = []       # keep list of strings & arrays to store in heap
+heap = []           # keep track to allocate space in memory
+heap_usage = 0      # keep track of how much memory has been used
+heap_access = []    # global list of memory locations
 
 
 ######################################
@@ -249,6 +250,7 @@ class Program(object):
 
     def eval(self, env=None):
         for line in self.lines:
+            print "LINE:", line
             line.eval(env)
     
     def emit(self, c=None):
@@ -377,6 +379,7 @@ def symbol(ttype, bp=0):
 symbol("ID").nulld = lambda self: self
 ID_class = symbol("ID")
 def eval_id(self, env):
+    print "EVAL ID"
     return env[self.value]
 ID_class.eval = eval_id
 def emit_id(self):
@@ -400,11 +403,18 @@ def eval_string(self, env):
     return self.value[1:-1]  # print out sans quotes
 string_class.eval = eval_string
 def emit_string(self):
-    global heap_usage
-    strings.append(self.value)  # add to global list of strings
-    heap_access.append("U8[strings[%d]]>>%d" % (strings.index(self.value), heap_usage))  # assumes 8 bit ints
-    heap_usage += len(self.value[1:-1]) + 1  # count num bytes to allocate in the heap
-    return [ ord(letter) for letter in self.value[1:-1].strip('"') ]  # return list of ints
+    global heap, var_pile
+    string = self.value.strip('"')
+    var_pile.append(string)
+    
+    heap[offset] = len(string)
+    offset += 1
+    for char in string:
+        heap[offset] = char
+        offset += 1 
+    heap_access.append("U8[var_pile[%d]]>>%d" % (var_pile.index(string), heap))
+    heap += len(string) + 1  # count num bytes to allocate in the heap
+    return heap[self.value[0]]  # index into heap 
 string_class.emit = emit_string
 
 symbol("true").nulld = lambda self: self
@@ -501,7 +511,6 @@ def prefix(ttype, bp):
     return sym
 
 # Register operator symbols to symbol_table
-# prefix("!", 20)
 negative_class = prefix("-", 130)
 def eval_negative(self, env):
     return -(self.first.eval(env))
@@ -747,6 +756,19 @@ def method(NewSymbol):
         setattr(NewSymbol, fn.__name__, fn)
     return bind
 
+"""
+# Parenthetical expressions
+@method(symbol("("))
+def nulld(self):
+    advance()
+    while token.value != ")":
+        self.first = parse_expression()
+    advance(")")
+    return self
+@method(symbol("("))
+def eval(self, env):
+    return self.first.eval(env)
+"""
 
 # Function calls
 @method(symbol("("))
@@ -762,12 +784,18 @@ def leftd(self, left):
     return self
 @method(symbol("("))
 def eval(self, env):
-    fn = env[self.first.value]
-    arglist = [ each.value for each in fn.second ]
-    pass_values = [ item.eval(env) for item in self.second ]
-    zipped = zip(arglist, pass_values)
-    env.update(dict(zipped))             # create new var env for life of function
-    return fn.third.eval(env)
+    print "EVALLING FN CALL"
+    if self.second:
+        print "EVALLING FN CALL"
+        fn = env[self.first.value]
+        arglist = [ each.value for each in fn.second ]
+        pass_values = [ item.eval(env) for item in self.second ]
+        zipped = zip(arglist, pass_values)
+        env.update(dict(zipped))             # create new environment for life of function
+        return fn.third.eval(env)
+    else:
+        print "EVALLING PARENS"
+        return self.first.eval(env)
 @method(symbol("("))
 def emit(self):
     fn = const_table[self.first.value]
@@ -811,7 +839,7 @@ def nulld(self):
         advance(",")
     advance("]")
     return self
-@method(symbol("["))
+@method(symbol("["))  # to handle item lookup
 def leftd(self, left):
     self.first = left
     self.second = parse_expression()
@@ -845,10 +873,12 @@ def nulld(self):
     return self
 @method(symbol("{"))
 def eval(self, env):
+    print "EVAL {"
     for each in self.first:
         last_val = each.eval(env)
         if each.value == "return":  # or break?
             break
+    print last_val
     return last_val  # Ruby-style: if no return statement, implicitly return last value
 @method(symbol("{"))
 def emit(self):
@@ -911,6 +941,7 @@ return_class.emit = emit_return
 # Print
 print_class = statement("print", 0)
 def eval_print(self, env):
+    print "OH HELLO PRINT"
     print self.first.eval(env)
 print_class.eval = eval_print
 def emit_print(self):
@@ -948,7 +979,7 @@ def eval(self, env):
         env[self.first] = self.third.eval(env)
 @method(symbol("var"))
 def emit(self):
-    global const_table 
+    global const_table, heap
     # get rid of global prefix
     if "$" in self.first:
         self.first = self.first.replace('$', '')
@@ -959,7 +990,12 @@ def emit(self):
 
     # if var is an array
     if isinstance(self.second, list):
-        return "var %s = %s" % (self.first, const_table[self.first] if self.third else "[]")
+        # return "var %s = %s" % (self.first, const_table[self.first] if self.third else "[]")
+        if self.second[1] == "int":
+            heap_access.append("U16[const_table[self.value]]>>%d" % heap)
+            heap += self.second[0]  # count num bytes to allocate in the heap
+        # return a pointer to start of array
+        return [ ord(letter) for letter in self.value[1:-1].strip('"') ]  # return list of ints
 
     # int -> 32Uint 
     elif self.second == "int":
@@ -1021,6 +1057,7 @@ def stmtd(self):
     return self
 @method(symbol("for"))
 def eval(self, env):
+    print "EVAL FOR"
     self.first[0].eval(env)
     while self.first[1].eval(env) == True:
         self.second.eval(env)
@@ -1051,6 +1088,7 @@ def stmtd(self):
     return self
 @method(symbol("if"))
 def eval(self, env):
+    print "EVAL IF"
     if self.first.eval(env) == True:
         return self.second.eval(env)
     elif self.third:
@@ -1084,6 +1122,7 @@ def stmtd(self):
     return self
 @method(symbol("elsif"))
 def eval(self, env):
+    print "EVAL ELSIF"
     if self.first.eval(env) == True:
         return self.second.eval(env)
     elif self.third:
@@ -1104,6 +1143,7 @@ def stmtd(self):
     return self
 @method(symbol("else"))
 def eval(self, env):
+    print "EVAL ELSE"
     return self.first.eval(env) 
 @method(symbol("else"))
 def emit(self):
@@ -1131,6 +1171,7 @@ def stmtd(self):
     return self
 @method(symbol("def"))
 def eval(self, env):
+    print "EVALLING A FUNCTION"
     env[self.first] = self
 @method(symbol("def"))
 def emit(self):
@@ -1146,8 +1187,8 @@ def emit(self):
 def write_file(filename, jscode):
     global header, footer, heap_access
     f = open(filename + ".js", "w+")
-    returns = "return { fizzbuzz: fizzbuzz }"
-    output = header.TEMPLATE % (strings, jscode, ";\n\t".join([ each for each in heap_access ]), returns)
+    returns = "return { fizzbuzz: fizzbuzz }"  # don't hard code this
+    output = header.TEMPLATE % (var_pile, jscode, ";\n\t".join([ each for each in heap_access ]), returns)
     f.write(output)
     f.close()
 
@@ -1161,7 +1202,7 @@ def main():
     print "\nPython interpreter says: "
     p.eval(env)                     # pass in empty global env dictionary
     # p.build_const_table()         # produce table of fn names & vars & locations in memory
-    print "\nOh look it's Javascript: "
+    print "\nOh look it's asm.js: "
     jscode = p.emit()
     write_file(prefix, "\n".join(jscode))  # must write type string to file
     return jscode
